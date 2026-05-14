@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}Yeni Hasta - PFN Platform{% endblock %}
+
+{% block nav_links %}
+<a href="/" class="nav-link primary">Yeni Hasta</a>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:720px;margin:0 auto">
+  <h2 class="section-title">Yeni Hasta Kaydi</h2>
+  <p style="color:#64748b;font-size:14px;margin-bottom:20px">
+    Once temel bilgileri girin. Sonra grafileri yukleyebilirsiniz.
+  </p>
+  
+  <form id="newPatientForm">
+    <div class="form-row-3">
+      <div class="form-group">
+        <label>Yas *</label>
+        <input type="number" id="age" required min="0" max="120" placeholder="orn. 72">
+      </div>
+      <div class="form-group">
+        <label>Cinsiyet *</label>
+        <select id="sex" required>
+          <option value="">Secin...</option>
+          <option value="M">Erkek</option>
+          <option value="F">Kadin</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Kirik Tarafi *</label>
+        <select id="side" required>
+          <option value="">Secin...</option>
+          <option value="right">Sag</option>
+          <option value="left">Sol</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label>Civi Markasi (varsa)</label>
+      <select id="nail_brand">
+        <option value="">Bilinmiyor</option>
+        <option value="PFNA">PFNA</option>
+        <option value="PFNA-II">PFNA-II</option>
+        <option value="Gamma 3">Gamma 3</option>
+        <option value="TFN">TFN</option>
+        <option value="InterTAN">InterTAN</option>
+        <option value="Trigen INTERTAN">Trigen INTERTAN</option>
+        <option value="Other">Diger</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>Sonuc (Outcome)</label>
+      <select id="outcome">
+        <option value="pending">Henuz belirsiz / Yeni hasta</option>
+        <option value="union">Normal kaynama</option>
+        <option value="failure">Failure (cut-out)</option>
+      </select>
+      <small style="color:#94a3b8;font-size:12px;display:block;margin-top:4px">
+        Yeni hastalar icin "Belirsiz" secebilirsiniz. Takip sonrasi guncellenebilir.
+      </small>
+    </div>
+    
+    <div id="formMessages"></div>
+    
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+      <button type="submit" class="btn btn-primary">Kaydet ve Grafi Yukle</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('newPatientForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const data = {
+    age: parseInt(document.getElementById('age').value),
+    sex: document.getElementById('sex').value,
+    side: document.getElementById('side').value,
+    nail_brand: document.getElementById('nail_brand').value || null,
+    outcome: document.getElementById('outcome').value,
+  };
+  
+  const msg = document.getElementById('formMessages');
+  msg.innerHTML = '<div class="alert alert-info">Kaydediliyor...</div>';
+  
+  try {
+    const res = await fetch('/api/patients', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    
+    if (result.success) {
+      msg.innerHTML = '<div class="alert alert-success">Hasta kaydedildi! Grafi yukleme sayfasina yonlendiriliyor...</div>';
+      setTimeout(() => {
+        window.location = `/patient/${result.patient.id}`;
+      }, 600);
+    } else {
+      msg.innerHTML = `<div class="alert alert-error">${result.error || 'Hata olustu'}</div>`;
+    }
+  } catch (err) {
+    msg.innerHTML = `<div class="alert alert-error">Baglanti hatasi: ${err.message}</div>`;
+  }
+});
+</script>
+{% endblock %}

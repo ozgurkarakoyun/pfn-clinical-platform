@@ -1,8 +1,6 @@
 """
-AO Siniflama AI Modeli (preop)
-femur_model.pt'yi yukler ve siniflama yapar.
+AO Siniflama AI Modeli (preop) - femur_model.pt
 """
-import os
 from pathlib import Path
 from threading import Lock
 
@@ -13,7 +11,7 @@ MODEL_PATH = Path(__file__).parent.parent / 'models_files' / 'femur_model.pt'
 
 
 def get_ao_model():
-    """Lazy load - model sadece bir kez yuklenir, thread-safe"""
+    """Lazy load thread-safe"""
     global _model
     if _model is None:
         with _model_lock:
@@ -33,16 +31,7 @@ def get_ao_model():
 def classify_fracture(image_path, conf_threshold=0.25):
     """
     Bir grafide AO siniflamasi yap.
-    
-    Returns:
-        dict: {
-            'best_class': str,           # En yuksek confidence sinif
-            'best_confidence': float,     # 0-1
-            'best_bbox': [x1,y1,x2,y2],  # Sinirlayici kutu
-            'all_predictions': [          # Tum tahminler
-                {'class': str, 'confidence': float, 'bbox': [...]}
-            ]
-        }
+    Returns dict with best_class, best_confidence, best_bbox, all_predictions
     """
     model = get_ao_model()
     results = model.predict(image_path, conf=conf_threshold, verbose=False)
@@ -77,7 +66,6 @@ def classify_fracture(image_path, conf_threshold=0.25):
             'bbox': [round(x, 1) for x in bbox],
         })
     
-    # En yuksek confidence olan
     all_preds.sort(key=lambda x: x['confidence'], reverse=True)
     best = all_preds[0]
     

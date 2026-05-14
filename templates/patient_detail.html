@@ -2,83 +2,97 @@
 
 {% block title %}Hasta #{{ patient_id }} - PFN Platform{% endblock %}
 
+{% block nav_links %}
+{% if user_role == 'admin' %}
+<a href="/admin" class="nav-link">Hasta Listesi</a>
+<a href="/admin/dashboard" class="nav-link">Istatistikler</a>
+{% else %}
+<a href="/" class="nav-link primary">+ Yeni Hasta</a>
+{% endif %}
+{% endblock %}
+
 {% block extra_css %}
 .patient-header {
   background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  padding: 18px 24px;
+  padding: 16px 22px;
   border-radius: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+}
+.patient-info {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  gap: 24px;
   flex-wrap: wrap;
-  gap: 10px;
+  margin-top: 8px;
 }
-.patient-info-grid {
+.info-item { font-size: 14px; }
+.info-item strong { color: #1e40af; }
+.upload-section {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
-.info-item { font-size: 13px; }
-.info-item strong { color: #1e40af; display: block; margin-bottom: 2px; }
-.tabs { display: flex; gap: 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 18px; flex-wrap: wrap; }
-.tab {
-  padding: 10px 18px;
-  cursor: pointer;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
-  font-weight: 500;
-  font-size: 14px;
+@media (min-width: 900px) {
+  .upload-section { grid-template-columns: 1fr 1fr 1fr; }
 }
-.tab.active { color: #1e40af; border-bottom-color: #1e40af; }
-.tab-content { display: none; }
-.tab-content.active { display: block; }
 .upload-zone {
   border: 2px dashed #cbd5e1;
   border-radius: 12px;
-  padding: 30px;
+  padding: 20px;
   text-align: center;
   background: #f8fafc;
   cursor: pointer;
   transition: all 0.15s;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .upload-zone:hover { border-color: #3b82f6; background: #eff6ff; }
-.upload-zone.has-image { padding: 14px; background: white; }
-.image-preview { max-width: 100%; max-height: 400px; border-radius: 8px; }
-.ai-result-box {
+.upload-zone.has-image { padding: 12px; background: white; cursor: default; }
+.image-preview { max-width: 100%; max-height: 280px; border-radius: 6px; }
+.section-card { padding: 14px; }
+.section-card h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e40af;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.ai-result-small {
   background: #f0f9ff;
-  padding: 16px;
-  border-radius: 8px;
-  margin-top: 14px;
-  border-left: 4px solid #3b82f6;
-}
-.ai-result-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-  margin-top: 10px;
-}
-.metric-card {
-  background: white;
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 6px;
+  margin-top: 10px;
   border-left: 3px solid #3b82f6;
+  font-size: 13px;
 }
-.metric-card .label { font-size: 11px; color: #64748b; text-transform: uppercase; }
-.metric-card .value { font-size: 18px; font-weight: 700; color: #1e293b; }
-.risk-banner {
-  padding: 14px;
-  border-radius: 8px;
-  margin-top: 12px;
-  text-align: center;
+.metric-mini-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
 }
-.risk-MINIMAL { background: #d1fae5; color: #065f46; }
-.risk-DUSUK { background: #fef3c7; color: #92400e; }
-.risk-ORTA { background: #fed7aa; color: #9a3412; }
-.risk-YUKSEK { background: #fecaca; color: #991b1b; }
-.risk-score { font-size: 28px; font-weight: 700; }
+.metric-mini {
+  background: white;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border-left: 2px solid #3b82f6;
+}
+.metric-mini .label { font-size: 10px; color: #64748b; text-transform: uppercase; }
+.metric-mini .value { font-size: 13px; font-weight: 700; color: #1e293b; }
+.risk-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.risk-pill.MINIMAL { background: #d1fae5; color: #065f46; }
+.risk-pill.DUSUK { background: #fef3c7; color: #92400e; }
+.risk-pill.ORTA { background: #fed7aa; color: #9a3412; }
+.risk-pill.YUKSEK { background: #fecaca; color: #991b1b; }
 {% endblock %}
 
 {% block content %}
@@ -90,6 +104,7 @@
 {% block scripts %}
 <script>
 const PATIENT_ID = {{ patient_id }};
+const USER_ROLE = '{{ user_role }}';
 let patientData = null;
 
 async function loadPatient() {
@@ -99,12 +114,13 @@ async function loadPatient() {
     
     if (!data.success) {
       document.getElementById('patientContainer').innerHTML = 
-        `<div class="alert alert-error">Hasta bulunamadi: ${data.error}</div>`;
+        `<div class="alert alert-error">${data.error || 'Hasta bulunamadi'}</div>`;
       return;
     }
     
     patientData = data.patient;
     renderPatient();
+    loadCombined();
   } catch (e) {
     document.getElementById('patientContainer').innerHTML = 
       `<div class="alert alert-error">Hata: ${e.message}</div>`;
@@ -115,327 +131,223 @@ function renderPatient() {
   const p = patientData;
   const sexTxt = p.sex === 'M' ? 'Erkek' : 'Kadin';
   const sideTxt = p.side === 'right' ? 'Sag' : 'Sol';
+  const outcomeBadge = `<span class="badge badge-outcome-${p.outcome}">${getOutcomeLabel(p.outcome)}</span>`;
   
-  let comorbHtml = '';
-  if (p.comorbidities && p.comorbidities.length > 0) {
-    comorbHtml = p.comorbidities.map(c => `<span class="badge badge-AO-A2">${c}</span>`).join(' ');
-  }
+  // Postop AP ve LAT analizleri
+  const apList = (p.postop_analyses || []).filter(a => a.view_type === 'AP');
+  const latList = (p.postop_analyses || []).filter(a => a.view_type === 'LAT');
+  const apAnalysis = apList.length > 0 ? apList[apList.length - 1] : null;
+  const latAnalysis = latList.length > 0 ? latList[latList.length - 1] : null;
+  
+  let backLink = USER_ROLE === 'admin' ? '/admin' : '/';
+  let backLabel = USER_ROLE === 'admin' ? '← Hasta Listesi' : '← Yeni Hasta';
   
   document.getElementById('patientContainer').innerHTML = `
     <div class="patient-header">
-      <div style="flex:1;min-width:280px">
-        <h2 style="color:#1e3a8a">Hasta #${p.id} ${p.hospital_code ? '- ' + p.hospital_code : ''}</h2>
-        <div class="patient-info-grid">
-          <div class="info-item"><strong>Yas/Cinsiyet</strong>${p.age} / ${sexTxt}</div>
-          <div class="info-item"><strong>Taraf</strong>${sideTxt}</div>
-          <div class="info-item"><strong>ASA</strong>${p.asa_score || '-'}</div>
-          <div class="info-item"><strong>Kirik-Op</strong>${p.delay_days !== null ? p.delay_days + ' gun' : '-'}</div>
-          <div class="info-item"><strong>BMI</strong>${(p.weight_kg && p.height_cm) ? (p.weight_kg / Math.pow(p.height_cm/100, 2)).toFixed(1) : '-'}</div>
-        </div>
-        ${comorbHtml ? `<div style="margin-top:10px"><strong style="font-size:13px;color:#1e40af">Komorbiditeler:</strong> ${comorbHtml}</div>` : ''}
-      </div>
-      <div>
-        <a href="/" class="btn btn-secondary">← Geri</a>
-        <button class="btn btn-danger" onclick="deletePatient()">Hastayi Sil</button>
-      </div>
-    </div>
-    
-    <div class="tabs">
-      <div class="tab active" onclick="showTab('preop')">1. Preop Grafi (AO)</div>
-      <div class="tab" onclick="showTab('postop-ap')">2. Postop AP (PFN)</div>
-      <div class="tab" onclick="showTab('postop-lat')">3. Postop LAT (PFN)</div>
-      <div class="tab" onclick="showTab('combined')">Toplam TAD</div>
-      <div class="tab" onclick="showTab('followup')">Takip</div>
-    </div>
-    
-    <div class="tab-content active" id="tab-preop">
-      ${renderPreopTab()}
-    </div>
-    <div class="tab-content" id="tab-postop-ap">
-      ${renderPostopTab('AP')}
-    </div>
-    <div class="tab-content" id="tab-postop-lat">
-      ${renderPostopTab('LAT')}
-    </div>
-    <div class="tab-content" id="tab-combined">
-      ${renderCombinedTab()}
-    </div>
-    <div class="tab-content" id="tab-followup">
-      ${renderFollowupTab()}
-    </div>
-  `;
-  
-  loadCombined();
-}
-
-function renderPreopTab() {
-  const preop = patientData.preop_analysis;
-  
-  if (!preop) {
-    return `
-      <div class="card">
-        <h3 class="section-title">Preop Grafi - AO Siniflama</h3>
-        <p style="color:#64748b;margin-bottom:14px">Kirik grafiyi yukleyin, AI otomatik olarak AO siniflamasini yapacak (31-A1/A2/A3/B veya normal).</p>
-        <div class="upload-zone" onclick="document.getElementById('preopFile').click()">
-          <p style="font-size:18px;margin-bottom:6px">📤 Grafi yuklemek icin tiklayin</p>
-          <p style="font-size:13px;color:#94a3b8">JPG / PNG / DICOM</p>
-        </div>
-        <input type="file" id="preopFile" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPreop(this.files[0])">
-        <div id="preopUploadStatus"></div>
-      </div>
-    `;
-  }
-  
-  const finalClass = preop.final_class || preop.ai_class || 'normal';
-  const badgeClass = finalClass.includes('A1') ? 'badge-AO-A1' :
-                     finalClass.includes('A2') ? 'badge-AO-A2' :
-                     finalClass.includes('A3') ? 'badge-AO-A3' :
-                     finalClass.includes('B') ? 'badge-AO-B' : 'badge-AO-normal';
-  
-  return `
-    <div class="card">
-      <h3 class="section-title">Preop Grafi - AO Siniflama</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
         <div>
-          <img src="${preop.image_url}" class="image-preview" style="border:1px solid #e2e8f0">
-        </div>
-        <div>
-          <div class="ai-result-box">
-            <h4 style="margin-bottom:10px">AI Sonucu</h4>
-            <div class="ai-result-row">
-              <span>Tahmin:</span>
-              <span class="badge ${badgeClass}" style="font-size:16px;padding:5px 12px">${preop.ai_class}</span>
-            </div>
-            <div class="ai-result-row">
-              <span>Confidence:</span>
-              <span><strong>${(preop.ai_confidence * 100).toFixed(1)}%</strong></span>
-            </div>
-            ${preop.manual_corrected ? `
-              <div class="ai-result-row">
-                <span>Manuel Duzeltme:</span>
-                <span class="badge ${badgeClass}">${preop.manual_class}</span>
-              </div>
-            ` : ''}
+          <h2 style="color:#1e3a8a">Hasta #${p.id}</h2>
+          <div class="patient-info">
+            <div class="info-item"><strong>Yas:</strong> ${p.age}</div>
+            <div class="info-item"><strong>Cinsiyet:</strong> ${sexTxt}</div>
+            <div class="info-item"><strong>Taraf:</strong> ${sideTxt}</div>
+            <div class="info-item"><strong>Civi:</strong> ${p.nail_brand || '-'}</div>
+            <div class="info-item"><strong>Sonuc:</strong> ${outcomeBadge}</div>
           </div>
-          
-          <div style="margin-top:14px">
-            <label style="font-size:13px;color:#475569;margin-bottom:5px;display:block">Manuel AO Duzeltme:</label>
-            <select id="manualAOClass" style="width:100%;padding:9px;border:1px solid #cbd5e1;border-radius:6px">
-              <option value="">Duzeltme yok</option>
-              <option value="31-A1" ${preop.manual_class === '31-A1' ? 'selected' : ''}>31-A1</option>
-              <option value="31-A2" ${preop.manual_class === '31-A2' ? 'selected' : ''}>31-A2</option>
-              <option value="31-A3" ${preop.manual_class === '31-A3' ? 'selected' : ''}>31-A3</option>
-              <option value="31-B" ${preop.manual_class === '31-B' ? 'selected' : ''}>31-B (Boyun)</option>
-              <option value="normal" ${preop.manual_class === 'normal' ? 'selected' : ''}>Normal</option>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <a href="${backLink}" class="btn btn-secondary">${backLabel}</a>
+          <button class="btn btn-success" onclick="showEditOutcome()">Sonuc Guncelle</button>
+          ${USER_ROLE === 'admin' ? `<button class="btn btn-danger" onclick="deletePatient()">Sil</button>` : ''}
+        </div>
+      </div>
+      <div id="editOutcomeArea" style="display:none;margin-top:14px;padding:14px;background:white;border-radius:6px">
+        <div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px">
+            <label style="font-size:13px;color:#475569;display:block;margin-bottom:4px">Sonuc</label>
+            <select id="outcomeSelect" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px">
+              <option value="pending" ${p.outcome === 'pending' ? 'selected' : ''}>Belirsiz / Yeni</option>
+              <option value="union" ${p.outcome === 'union' ? 'selected' : ''}>Normal kaynama</option>
+              <option value="failure" ${p.outcome === 'failure' ? 'selected' : ''}>Failure (cut-out)</option>
             </select>
-            <button class="btn btn-primary" onclick="savePreopCorrection()" style="margin-top:10px;width:100%">Duzeltmeyi Kaydet</button>
           </div>
-          
-          <div style="margin-top:14px;display:flex;gap:8px">
-            <button class="btn btn-secondary" onclick="document.getElementById('preopFile').click()">Yeniden Yukle</button>
-            <button class="btn btn-danger" onclick="deletePreop()">Sil</button>
-          </div>
-          <input type="file" id="preopFile" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPreop(this.files[0])">
+          <button class="btn btn-primary" onclick="saveOutcome()">Kaydet</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('editOutcomeArea').style.display='none'">Iptal</button>
         </div>
       </div>
-      <div id="preopUploadStatus" style="margin-top:14px"></div>
     </div>
-  `;
-}
-
-function renderPostopTab(viewType) {
-  const analyses = patientData.postop_analyses.filter(a => a.view_type === viewType);
-  const latest = analyses.length > 0 ? analyses[analyses.length - 1] : null;
-  
-  if (!latest) {
-    return `
-      <div class="card">
-        <h3 class="section-title">Postop ${viewType} Grafi - PFN Analiz</h3>
-        ${viewType === 'LAT' ? '<p style="color:#64748b;margin-bottom:14px">Opsiyonel: Lateral grafi varsa toplam TAD (AP+LAT) hesaplanabilir.</p>' : 
-                              '<p style="color:#64748b;margin-bottom:14px">AP grafi yukleyin, AI 9 anatomik keypoint tespit edip TAD, NSA, Cleveland, Parker hesaplayacak.</p>'}
-        <div class="upload-zone" onclick="document.getElementById('postopFile${viewType}').click()">
-          <p style="font-size:18px;margin-bottom:6px">📤 ${viewType} grafiyi yuklemek icin tiklayin</p>
-          <p style="font-size:13px;color:#94a3b8">JPG / PNG / DICOM</p>
-        </div>
-        <input type="file" id="postopFile${viewType}" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPostop(this.files[0], '${viewType}')">
-        <div id="postop${viewType}Status"></div>
+    
+    <div class="upload-section">
+      <!-- 1. PREOP -->
+      <div class="card section-card">
+        <h3>1. Preop (Kirik) Grafi</h3>
+        ${renderPreopSlot()}
       </div>
-    `;
-  }
-  
-  const tadValue = viewType === 'AP' ? latest.tad_ap_mm : latest.tad_lat_mm;
-  
-  return `
-    <div class="card">
-      <h3 class="section-title">Postop ${viewType} Grafi - PFN Analiz</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
-        <div>
-          <img src="${latest.image_url}" class="image-preview" style="border:1px solid #e2e8f0">
-          <div style="margin-top:10px;font-size:12px;color:#64748b">
-            Taraf: ${latest.detected_side === 'right' ? 'Sag' : 'Sol'} | 
-            Kalibrasyon: ${latest.calibration_method} (${latest.pixel_spacing_mm} mm/px)
-          </div>
-        </div>
-        <div>
-          <div class="metric-grid">
-            <div class="metric-card">
-              <div class="label">TAD-${viewType}</div>
-              <div class="value">${tadValue ? tadValue.toFixed(2) : '-'} mm</div>
-            </div>
-            <div class="metric-card">
-              <div class="label">NSA</div>
-              <div class="value">${latest.nsa_deg ? latest.nsa_deg.toFixed(1) : '-'}°</div>
-            </div>
-            <div class="metric-card">
-              <div class="label">Cleveland</div>
-              <div class="value" style="font-size:13px">${latest.cleveland_zone || '-'}</div>
-            </div>
-            <div class="metric-card">
-              <div class="label">Parker AP</div>
-              <div class="value">${latest.parker_ap_ratio || '-'}</div>
-            </div>
-          </div>
-          
-          <div class="risk-banner risk-${latest.risk_category}" style="margin-top:14px">
-            <div class="risk-score">${latest.risk_score}/100</div>
-            <div>${latest.risk_category} RISK</div>
-            ${latest.risk_factors && latest.risk_factors.length > 0 ? `
-              <ul style="text-align:left;margin-top:10px;font-size:12px;padding-left:20px">
-                ${latest.risk_factors.map(f => `<li>${f}</li>`).join('')}
-              </ul>
-            ` : ''}
-          </div>
-          
-          <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-secondary" onclick="document.getElementById('postopFile${viewType}').click()">Yeniden Yukle</button>
-            <button class="btn btn-danger" onclick="deletePostop(${latest.id})">Sil</button>
-          </div>
-          <input type="file" id="postopFile${viewType}" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPostop(this.files[0], '${viewType}')">
-        </div>
+      
+      <!-- 2. POSTOP AP -->
+      <div class="card section-card">
+        <h3>2. Postop AP Grafi (Erken)</h3>
+        ${renderPostopSlot('AP', apAnalysis)}
       </div>
-      <div id="postop${viewType}Status" style="margin-top:14px"></div>
+      
+      <!-- 3. POSTOP LAT -->
+      <div class="card section-card">
+        <h3>3. Postop LAT Grafi (Varsa)</h3>
+        ${renderPostopSlot('LAT', latAnalysis)}
+      </div>
     </div>
-  `;
-}
-
-function renderCombinedTab() {
-  return `
-    <div class="card">
+    
+    <!-- Toplam TAD -->
+    <div class="card" id="combinedCard">
       <h3 class="section-title">Toplam TAD (Baumgaertner)</h3>
-      <p style="color:#64748b;margin-bottom:14px">Hem postop AP hem LAT grafi yuklendiyse: Toplam TAD = TAD-AP + TAD-LAT (orijinal Baumgaertner formulu, cut-off >25 mm risk)</p>
       <div id="combinedResults"><div class="spinner"></div></div>
     </div>
   `;
 }
 
-function renderFollowupTab() {
-  const followups = patientData.followups || [];
+function getOutcomeLabel(o) {
+  if (o === 'union') return 'KAYNAMA';
+  if (o === 'failure') return 'FAILURE';
+  return 'BELIRSIZ';
+}
+
+function renderPreopSlot() {
+  const preop = patientData.preop_analysis;
   
-  let listHtml = '';
-  if (followups.length === 0) {
-    listHtml = '<p style="color:#94a3b8;text-align:center;padding:20px">Henuz takip kaydi yok</p>';
-  } else {
-    listHtml = '<table style="margin-top:14px"><thead><tr><th>Tarih</th><th>Hafta</th><th>Cut-out</th><th>Migration</th><th>Union</th><th>VAS</th><th>Mortality</th><th></th></tr></thead><tbody>';
-    for (const f of followups) {
-      listHtml += `<tr>
-        <td>${f.followup_date}</td>
-        <td>${f.weeks_post_op || '-'}</td>
-        <td>${f.cut_out ? '✓' : '-'}</td>
-        <td>${f.screw_migration ? '✓' : '-'}</td>
-        <td>${f.union_status || '-'}</td>
-        <td>${f.vas_score || '-'}</td>
-        <td>${f.mortality ? '✓' : '-'}</td>
-        <td><button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="deleteFollowup(${f.id})">Sil</button></td>
-      </tr>`;
-    }
-    listHtml += '</tbody></table>';
+  if (!preop) {
+    return `
+      <div class="upload-zone" onclick="document.getElementById('preopFile').click()">
+        <div style="font-size:36px;margin-bottom:8px;opacity:0.4">📤</div>
+        <div style="font-weight:600;color:#475569">Kirik grafiyi yukle</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px">AI otomatik AO siniflar</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:6px">JPG / PNG / DICOM</div>
+      </div>
+      <input type="file" id="preopFile" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPreop(this.files[0])">
+      <div id="preopStatus"></div>
+    `;
   }
   
+  const cls = preop.final_class || preop.ai_class || 'normal';
+  const badgeClass = cls.includes('A1') ? 'badge-AO-A1' :
+                     cls.includes('A2') ? 'badge-AO-A2' :
+                     cls.includes('A3') ? 'badge-AO-A3' :
+                     cls.includes('B') ? 'badge-AO-B' : 'badge-AO-normal';
+  
   return `
-    <div class="card">
-      <h3 class="section-title">Takip Kayitlari</h3>
-      
-      <details style="margin-bottom:14px;background:#f8fafc;padding:14px;border-radius:8px">
-        <summary style="cursor:pointer;font-weight:600">+ Yeni Takip Kaydi Ekle</summary>
-        <div style="margin-top:14px">
-          <div class="form-row-3">
-            <div class="form-group">
-              <label>Takip Tarihi *</label>
-              <input type="date" id="fu_date" required>
-            </div>
-            <div class="form-group">
-              <label>VAS (0-10)</label>
-              <input type="number" id="fu_vas" min="0" max="10">
-            </div>
-            <div class="form-group">
-              <label>Harris Hip Score</label>
-              <input type="number" id="fu_harris" min="0" max="100">
-            </div>
-          </div>
-          <div class="form-row-3">
-            <div class="form-group">
-              <label>Union Durumu</label>
-              <select id="fu_union">
-                <option value="">Secin...</option>
-                <option value="united">Kaynama (united)</option>
-                <option value="delayed">Gecikmis (delayed)</option>
-                <option value="nonunion">Kaynamiyor (nonunion)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Cut-out</label>
-              <select id="fu_cutout">
-                <option value="false">Hayir</option>
-                <option value="true">Evet</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Screw Migration</label>
-              <select id="fu_migration">
-                <option value="false">Hayir</option>
-                <option value="true">Evet</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Mortality</label>
-              <select id="fu_mortality">
-                <option value="false">Hayir</option>
-                <option value="true">Evet</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Mortality Tarihi</label>
-              <input type="date" id="fu_mortality_date">
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Notlar</label>
-            <textarea id="fu_notes" rows="2"></textarea>
-          </div>
-          <button class="btn btn-primary" onclick="addFollowup()">Takip Ekle</button>
-          <div id="fuStatus"></div>
-        </div>
-      </details>
-      
-      ${listHtml}
+    <div class="upload-zone has-image">
+      <img src="${preop.image_url}" class="image-preview">
     </div>
+    <div class="ai-result-small">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <span><strong>AO Sinif:</strong></span>
+        <span class="badge ${badgeClass}">${cls}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <span>Confidence:</span>
+        <span><strong>${(preop.ai_confidence * 100).toFixed(1)}%</strong></span>
+      </div>
+    </div>
+    <div style="margin-top:10px">
+      <label style="font-size:12px;color:#475569;display:block;margin-bottom:4px">Manuel duzeltme:</label>
+      <select id="manualAOClass" style="width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">
+        <option value="">Duzeltme yok</option>
+        <option value="31-A1" ${preop.manual_class === '31-A1' ? 'selected' : ''}>31-A1</option>
+        <option value="31-A2" ${preop.manual_class === '31-A2' ? 'selected' : ''}>31-A2</option>
+        <option value="31-A3" ${preop.manual_class === '31-A3' ? 'selected' : ''}>31-A3</option>
+        <option value="31-B" ${preop.manual_class === '31-B' ? 'selected' : ''}>31-B</option>
+        <option value="normal" ${preop.manual_class === 'normal' ? 'selected' : ''}>normal</option>
+      </select>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-primary" onclick="savePreopCorrection()" style="font-size:12px;padding:6px 10px;flex:1">Duzeltmeyi Kaydet</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('preopFile').click()" style="font-size:12px;padding:6px 10px">Yeniden Yukle</button>
+        <button class="btn btn-danger" onclick="deletePreop()" style="font-size:12px;padding:6px 10px">Sil</button>
+      </div>
+      <input type="file" id="preopFile" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPreop(this.files[0])">
+    </div>
+    <div id="preopStatus"></div>
   `;
 }
 
-function showTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById(`tab-${name}`).classList.add('active');
+function renderPostopSlot(viewType, analysis) {
+  if (!analysis) {
+    const optional = viewType === 'LAT' ? ' (opsiyonel)' : '';
+    return `
+      <div class="upload-zone" onclick="document.getElementById('postopFile${viewType}').click()">
+        <div style="font-size:36px;margin-bottom:8px;opacity:0.4">📤</div>
+        <div style="font-weight:600;color:#475569">${viewType} grafiyi yukle${optional}</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px">AI 9 anatomik landmark + parametreler</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:6px">JPG / PNG / DICOM</div>
+      </div>
+      <input type="file" id="postopFile${viewType}" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPostop(this.files[0], '${viewType}')">
+      <div id="postop${viewType}Status"></div>
+    `;
+  }
+  
+  const tadValue = viewType === 'AP' ? analysis.tad_ap_mm : analysis.tad_lat_mm;
+  
+  return `
+    <div class="upload-zone has-image">
+      <img src="${analysis.image_url}" class="image-preview">
+    </div>
+    <div class="metric-mini-grid">
+      <div class="metric-mini">
+        <div class="label">TAD-${viewType}</div>
+        <div class="value">${tadValue ? tadValue.toFixed(2) + ' mm' : '-'}</div>
+      </div>
+      <div class="metric-mini">
+        <div class="label">NSA</div>
+        <div class="value">${analysis.nsa_deg ? analysis.nsa_deg.toFixed(1) + '°' : '-'}</div>
+      </div>
+      <div class="metric-mini">
+        <div class="label">Cleveland</div>
+        <div class="value" style="font-size:11px">${analysis.cleveland_zone || '-'}</div>
+      </div>
+      <div class="metric-mini">
+        <div class="label">Parker AP</div>
+        <div class="value">${analysis.parker_ap_ratio || '-'}</div>
+      </div>
+    </div>
+    ${analysis.risk_category ? `
+      <div style="margin-top:10px;text-align:center">
+        <span class="risk-pill ${analysis.risk_category}">${analysis.risk_score}/100 - ${analysis.risk_category}</span>
+      </div>
+    ` : ''}
+    <div style="margin-top:10px;display:flex;gap:6px">
+      <button class="btn btn-secondary" onclick="document.getElementById('postopFile${viewType}').click()" style="font-size:12px;padding:6px 10px;flex:1">Yeniden Yukle</button>
+      <button class="btn btn-danger" onclick="deletePostop(${analysis.id})" style="font-size:12px;padding:6px 10px">Sil</button>
+    </div>
+    <input type="file" id="postopFile${viewType}" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPostop(this.files[0], '${viewType}')">
+    <div id="postop${viewType}Status"></div>
+  `;
 }
 
-// Upload Preop
+// === Outcome ===
+function showEditOutcome() {
+  const area = document.getElementById('editOutcomeArea');
+  area.style.display = area.style.display === 'none' ? 'block' : 'none';
+}
+
+async function saveOutcome() {
+  const outcome = document.getElementById('outcomeSelect').value;
+  try {
+    const res = await fetch(`/api/patients/${PATIENT_ID}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({outcome}),
+    });
+    if ((await res.json()).success) {
+      loadPatient();
+    }
+  } catch (e) {
+    alert('Hata: ' + e.message);
+  }
+}
+
+// === Preop ===
 async function uploadPreop(file) {
   if (!file) return;
-  const status = document.getElementById('preopUploadStatus');
-  status.innerHTML = '<div class="alert alert-info">AI analiz yapiliyor... (10-30 saniye surebilir)</div>';
+  const status = document.getElementById('preopStatus');
+  status.innerHTML = '<div class="alert alert-info">AI analiz yapiliyor...</div>';
   
   const formData = new FormData();
   formData.append('image', file);
@@ -443,9 +355,7 @@ async function uploadPreop(file) {
   try {
     const res = await fetch(`/api/preop/${PATIENT_ID}/analyze`, {method: 'POST', body: formData});
     const data = await res.json();
-    
     if (data.success) {
-      status.innerHTML = '<div class="alert alert-success">Analiz tamamlandi!</div>';
       loadPatient();
     } else {
       status.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
@@ -457,31 +367,25 @@ async function uploadPreop(file) {
 
 async function savePreopCorrection() {
   const cls = document.getElementById('manualAOClass').value;
-  const status = document.getElementById('preopUploadStatus');
-  
   try {
     const res = await fetch(`/api/preop/${PATIENT_ID}/correct`, {
       method: 'PUT',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({manual_class: cls || null}),
     });
-    const data = await res.json();
-    if (data.success) {
-      status.innerHTML = '<div class="alert alert-success">Duzeltme kaydedildi</div>';
-      loadPatient();
-    }
+    if ((await res.json()).success) loadPatient();
   } catch (e) {
-    status.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    alert('Hata: ' + e.message);
   }
 }
 
 async function deletePreop() {
-  if (!confirm('Preop analizi silinsin mi?')) return;
+  if (!confirm('Preop grafiyi silmek istiyor musunuz?')) return;
   await fetch(`/api/preop/${PATIENT_ID}`, {method: 'DELETE'});
   loadPatient();
 }
 
-// Upload Postop
+// === Postop ===
 async function uploadPostop(file, viewType) {
   if (!file) return;
   const status = document.getElementById(`postop${viewType}Status`);
@@ -495,9 +399,7 @@ async function uploadPostop(file, viewType) {
   try {
     const res = await fetch(`/api/postop/${PATIENT_ID}/analyze`, {method: 'POST', body: formData});
     const data = await res.json();
-    
     if (data.success) {
-      status.innerHTML = '<div class="alert alert-success">Analiz tamamlandi!</div>';
       loadPatient();
     } else {
       status.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
@@ -508,12 +410,12 @@ async function uploadPostop(file, viewType) {
 }
 
 async function deletePostop(id) {
-  if (!confirm('Bu analiz silinsin mi?')) return;
+  if (!confirm('Analiz silinsin mi?')) return;
   await fetch(`/api/postop/${id}`, {method: 'DELETE'});
   loadPatient();
 }
 
-// Combined TAD
+// === Combined TAD ===
 async function loadCombined() {
   const container = document.getElementById('combinedResults');
   if (!container) return;
@@ -525,26 +427,25 @@ async function loadCombined() {
     if (!data.success) return;
     const c = data.combined;
     
-    let html = '<div class="metric-grid">';
-    html += `<div class="metric-card"><div class="label">TAD-AP</div><div class="value">${c.tad_ap_mm !== null ? c.tad_ap_mm.toFixed(2) + ' mm' : '-'}</div></div>`;
-    html += `<div class="metric-card"><div class="label">TAD-LAT</div><div class="value">${c.tad_lat_mm !== null ? c.tad_lat_mm.toFixed(2) + ' mm' : '-'}</div></div>`;
+    let html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">';
+    html += `<div class="metric-mini"><div class="label">TAD-AP</div><div class="value">${c.tad_ap_mm !== null ? c.tad_ap_mm.toFixed(2) + ' mm' : '-'}</div></div>`;
+    html += `<div class="metric-mini"><div class="label">TAD-LAT</div><div class="value">${c.tad_lat_mm !== null ? c.tad_lat_mm.toFixed(2) + ' mm' : '-'}</div></div>`;
     
     if (c.tad_total_mm !== null) {
-      html += `<div class="metric-card" style="border-left-color:#10b981;background:#ecfdf5"><div class="label">TAD TOPLAM</div><div class="value">${c.tad_total_mm.toFixed(2)} mm</div></div>`;
+      html += `<div class="metric-mini" style="border-left-color:#10b981;background:#ecfdf5"><div class="label">TAD TOPLAM</div><div class="value">${c.tad_total_mm.toFixed(2)} mm</div></div>`;
+    } else {
+      html += '<div></div>';
     }
     html += '</div>';
     
     if (c.method === 'baumgaertner_complete') {
-      const overText = c.over_threshold ? 
+      html += c.over_threshold ?
         '<div class="alert alert-error" style="margin-top:14px"><strong>UYARI:</strong> Toplam TAD > 25 mm (Baumgaertner cut-off) - Cut-out riski yuksek</div>' :
-        '<div class="alert alert-success" style="margin-top:14px"><strong>IYI:</strong> Toplam TAD < 25 mm (Baumgaertner cut-off)</div>';
-      html += overText;
-      html += '<p style="margin-top:10px;color:#64748b;font-size:13px">Yontem: Baumgaertner orijinal formulu (AP + LAT toplami)</p>';
+        '<div class="alert alert-success" style="margin-top:14px"><strong>IYI:</strong> Toplam TAD &lt; 25 mm</div>';
     } else if (c.method === 'ap_only') {
-      const overText = c.over_threshold ?
-        '<div class="alert alert-warning" style="margin-top:14px"><strong>UYARI:</strong> TAD-AP > 15 mm (AP-only literatür esigi). Lateral grafi yuklenmesi onerilir.</div>' :
-        '<div class="alert alert-info" style="margin-top:14px"><strong>BILGI:</strong> Sadece AP analizi mevcut. Lateral grafi eklenirse toplam TAD hesaplanabilir.</div>';
-      html += overText;
+      html += c.over_threshold ?
+        '<div class="alert alert-warning" style="margin-top:14px"><strong>UYARI:</strong> TAD-AP > 15 mm. Lateral grafi eklemesi onerilir.</div>' :
+        '<div class="alert alert-info" style="margin-top:14px">Sadece AP analizi mevcut. Lateral eklenirse toplam TAD hesaplanir.</div>';
     } else {
       html += '<p style="color:#94a3b8;text-align:center;padding:20px">Henuz postop grafi yuklenmedi</p>';
     }
@@ -555,61 +456,13 @@ async function loadCombined() {
   }
 }
 
-// Followup
-async function addFollowup() {
-  const status = document.getElementById('fuStatus');
-  const data = {
-    followup_date: document.getElementById('fu_date').value,
-    vas_score: parseInt(document.getElementById('fu_vas').value) || null,
-    harris_hip_score: parseInt(document.getElementById('fu_harris').value) || null,
-    union_status: document.getElementById('fu_union').value || null,
-    cut_out: document.getElementById('fu_cutout').value === 'true',
-    screw_migration: document.getElementById('fu_migration').value === 'true',
-    mortality: document.getElementById('fu_mortality').value === 'true',
-    mortality_date: document.getElementById('fu_mortality_date').value || null,
-    notes: document.getElementById('fu_notes').value || null,
-  };
-  
-  if (!data.followup_date) {
-    status.innerHTML = '<div class="alert alert-error">Takip tarihi zorunlu</div>';
-    return;
-  }
-  
-  try {
-    const res = await fetch(`/api/followup/${PATIENT_ID}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    
-    if (result.success) {
-      status.innerHTML = '<div class="alert alert-success">Takip eklendi</div>';
-      loadPatient();
-    } else {
-      status.innerHTML = `<div class="alert alert-error">${result.error}</div>`;
-    }
-  } catch (e) {
-    status.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
-  }
-}
-
-async function deleteFollowup(id) {
-  if (!confirm('Takip silinsin mi?')) return;
-  await fetch(`/api/followup/${id}`, {method: 'DELETE'});
-  loadPatient();
-}
-
-// Delete patient
 async function deletePatient() {
-  if (!confirm('HASTAYI ve tum verilerini silmek istediginize EMIN misiniz?')) return;
-  if (!confirm('Bu islem GERI ALINAMAZ! Devam edilsin mi?')) return;
+  if (!confirm('HASTAYI silmek istediginize EMIN misiniz? Geri alinamaz.')) return;
   
   try {
     const res = await fetch(`/api/patients/${PATIENT_ID}`, {method: 'DELETE'});
-    const data = await res.json();
-    if (data.success) {
-      window.location = '/';
+    if ((await res.json()).success) {
+      window.location = USER_ROLE === 'admin' ? '/admin' : '/';
     }
   } catch (e) {
     alert(`Hata: ${e.message}`);

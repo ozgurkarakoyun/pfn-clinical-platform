@@ -1,13 +1,12 @@
 """
 Postoperatif PFN Keypoint AI endpoint'i (AP veya LAT)
 """
-import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 from io import BytesIO
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 from PIL import Image, ImageOps
 import numpy as np
 
@@ -31,6 +30,20 @@ KEYPOINT_NAMES = [
     'head_medial', 'head_lateral', 'screw_tip',
     'neck_distal', 'shaft_proximal', 'shaft_distal'
 ]
+
+
+def require_doctor_or_admin():
+    if session.get('role') not in ('doctor', 'admin'):
+        return jsonify({'error': 'Giris yapmalisiniz'}), 401
+    return None
+
+
+def check_patient_access(patient_id):
+    if session.get('role') == 'doctor':
+        created = session.get('created_patients', [])
+        if patient_id not in created:
+            return jsonify({'error': 'Bu hastaya erisim yetkiniz yok'}), 403
+    return None
 
 
 def is_dicom(file_bytes, filename=""):
@@ -63,8 +76,6 @@ def read_dicom_to_pil(file_bytes):
     
     metadata = {
         'is_dicom': True,
-        'patient_name': str(getattr(ds, 'PatientName', '')) or None,
-        'patient_id': str(getattr(ds, 'PatientID', '')) or None,
         'study_date': str(getattr(ds, 'StudyDate', '')) or None,
         'modality': str(getattr(ds, 'Modality', '')) or None,
     }
@@ -79,7 +90,6 @@ def read_dicom_to_pil(file_bytes):
 
 
 def load_image_from_upload(file):
-    """Yuklenen dosyayi PIL Image'e cevir, DICOM metadata da don"""
     file_bytes = file.read()
     
     if is_dicom(file_bytes, file.filename):
@@ -107,13 +117,13 @@ def load_image_from_upload(file):
 
 @postop_bp.route('/<int:patient_id>/analyze', methods=['POST'])
 def analyze_postop(patient_id):
-    """
-    Postop grafi yukle (AP veya LAT) ve PFN AI analizi yap.
-    Body: form-data
-        'image': dosya
-        'view_type': 'AP' veya 'LAT'
-        'side': 'auto' / 'right' / 'left' (opsiyonel)
-    """
+    """Postop grafi yukle (AP veya LAT) ve PFN AI analizi yap"""
+    auth = require_doctor_or_admin()
+    if auth: return auth
+    
+    access = check_patient_access(patient_id)
+    if access: return access
+    
     try:
         patient = Patient.query.get_or_404(patient_id)
         
@@ -130,17 +140,14 @@ def analyze_postop(patient_id):
         
         manual_side = request.form.get('side', 'auto')
         
-        # Goruntuyu yukle (DICOM metadata da gelir)
         img, dicom_meta = load_image_from_upload(file)
         
-        # Diskte kaydet
         unique_id = uuid.uuid4().hex[:8]
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         filename = f'postop_{view_type.lower()}_{patient_id}_{timestamp}_{unique_id}.jpg'
         save_path = UPLOAD_DIR / filename
         img.save(save_path, 'JPEG', quality=90)
         
-        # AI keypoint tespit
         try:
             kp_result = predict_keypoints(str(save_path), side=manual_side)
         except Exception as ai_err:
@@ -151,14 +158,13 @@ def analyze_postop(patient_id):
         if not kp_result.get('success'):
             return jsonify({'error': kp_result.get('error', 'Keypoint tespit edilemedi')}), 400
         
-        # Default kalibrasyon (DICOM varsa otomatik)
+        # Kalibrasyon
         pixel_spacing = 0.14
         calibration_method = 'default'
         if dicom_meta and dicom_meta.get('pixel_spacing_mm'):
             pixel_spacing = dicom_meta['pixel_spacing_mm']
             calibration_method = 'dicom'
         
-        # Geometrik parametre hesaplama
         keypoints_dict = {name: tuple(kp_result['keypoints'][name]) 
                           for name in KEYPOINT_NAMES}
         
@@ -169,7 +175,17 @@ def analyze_postop(patient_id):
         )
         risk = calculate_failure_risk(params)
         
-        # Database'e kaydet
+        # Mevcut ayni view_type analiz varsa sil
+        existing = PostopAnalysis.query.filter_by(
+            patient_id=patient_id, view_type=view_type
+        ).first()
+        if existing:
+            old_path = UPLOAD_DIR / existing.image_filename
+            if old_path.exists():
+                old_path.unlink()
+            db.session.delete(existing)
+            db.session.flush()
+        
         analysis = PostopAnalysis(
             patient_id=patient_id,
             view_type=view_type,
@@ -215,19 +231,18 @@ def analyze_postop(patient_id):
 
 @postop_bp.route('/<int:analysis_id>/recalculate', methods=['POST'])
 def recalculate(analysis_id):
-    """
-    Manuel duzeltilmis keypoint'ler ve/veya kalibrasyon ile yeniden hesapla.
-    Body: JSON
-        keypoints: {name: [x,y]}
-        pixel_spacing_mm: float
-        d_true_mm: float
-        manual_apex: [x,y] veya None
-    """
+    """Manuel duzeltilmis keypoint'lerle yeniden hesapla"""
+    auth = require_doctor_or_admin()
+    if auth: return auth
+    
     try:
         analysis = PostopAnalysis.query.get_or_404(analysis_id)
+        
+        access = check_patient_access(analysis.patient_id)
+        if access: return access
+        
         data = request.get_json() or {}
         
-        # Yeni keypoint'ler
         keypoints_dict = {}
         kp_data = data.get('keypoints', analysis.keypoints)
         for name in KEYPOINT_NAMES:
@@ -248,7 +263,6 @@ def recalculate(analysis_id):
         )
         risk = calculate_failure_risk(params)
         
-        # Guncelle
         analysis.keypoints = {name: list(kp) for name, kp in keypoints_dict.items()}
         analysis.keypoints_manual_corrected = True
         analysis.apex_point = params.get('apex_point')
@@ -286,16 +300,17 @@ def recalculate(analysis_id):
         return jsonify({'error': str(e)}), 500
 
 
-@postop_bp.route('/<int:analysis_id>', methods=['GET'])
-def get_postop(analysis_id):
-    analysis = PostopAnalysis.query.get_or_404(analysis_id)
-    return jsonify({'success': True, 'analysis': analysis.to_dict()})
-
-
 @postop_bp.route('/<int:analysis_id>', methods=['DELETE'])
 def delete_postop(analysis_id):
+    auth = require_doctor_or_admin()
+    if auth: return auth
+    
     try:
         analysis = PostopAnalysis.query.get_or_404(analysis_id)
+        
+        access = check_patient_access(analysis.patient_id)
+        if access: return access
+        
         old_path = UPLOAD_DIR / analysis.image_filename
         if old_path.exists():
             old_path.unlink()
@@ -309,13 +324,14 @@ def delete_postop(analysis_id):
 
 @postop_bp.route('/<int:patient_id>/combined', methods=['GET'])
 def combined_tad(patient_id):
-    """
-    Bir hastanin tum AP + LAT postop analizlerinden total TAD hesapla (Baumgaertner).
-    TAD_total = TAD_AP + TAD_LAT
-    """
+    """Toplam TAD (AP + LAT) hesabi"""
+    auth = require_doctor_or_admin()
+    if auth: return auth
+    
+    access = check_patient_access(patient_id)
+    if access: return access
+    
     try:
-        patient = Patient.query.get_or_404(patient_id)
-        
         ap_analyses = PostopAnalysis.query.filter_by(
             patient_id=patient_id, view_type='AP'
         ).order_by(PostopAnalysis.created_at.desc()).all()

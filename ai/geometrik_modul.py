@@ -1,10 +1,7 @@
 """
-PFN AP grafisinden klinik parametre hesabı (v2)
-
-- Baumgaertner TAD-AP: APEX = anatomic_neck_axis extension
-- NSA: Neck-Shaft Angle
-- Cleveland: 9 zone
-- Parker AP: vida-femur eksen kesisimi
+PFN AP/LAT grafisinden klinik parametre hesabı.
+- Baumgaertner TAD: APEX = anatomic_neck_axis extension
+- NSA, Cleveland, Parker AP (vida-femur eksen kesisimi)
 """
 import numpy as np
 import math
@@ -24,7 +21,6 @@ def calculate_line_angle(line_a, line_b):
 
 
 def line_line_intersection(p1, p2, p3, p4):
-    """Iki cizginin kesisim noktasi"""
     x1, y1 = p1
     x2, y2 = p2
     x3, y3 = p3
@@ -48,13 +44,7 @@ def compute_femur_head_geometry(keypoints):
 
 
 def compute_apex_baumgaertner(keypoints):
-    """
-    APEX: Femur boyun aksi uzantisinda femur basi yuzeyi.
-    
-    1. Boyun aksi yonu = (head_center - neck_distal) / |...|
-    2. APEX = head_center + radius * axis_unit
-    3. X_ap = ||APEX - screw_tip||
-    """
+    """APEX = head_center + radius * (head_center - neck_distal) / |...|"""
     screw_tip = np.array(keypoints['screw_tip'])
     head_center = np.array(keypoints['head_center'])
     neck_distal = np.array(keypoints['neck_distal'])
@@ -76,14 +66,9 @@ def compute_apex_baumgaertner(keypoints):
 
 
 def compute_pfn_parameters(keypoints, pixel_spacing_mm=0.14, D_true_mm=45.0, manual_apex=None):
-    """
-    PFN AP grafisinden tum klinik parametreler.
-    
-    manual_apex: kullanici elle yerlestirdiyse [x,y], yoksa None
-    """
+    """PFN grafisinden tum klinik parametreler"""
     kp = keypoints
     
-    # APEX hesabi
     if manual_apex is not None and len(manual_apex) == 2:
         apex = (float(manual_apex[0]), float(manual_apex[1]))
         screw_tip = np.array(kp['screw_tip'])
@@ -94,7 +79,6 @@ def compute_pfn_parameters(keypoints, pixel_spacing_mm=0.14, D_true_mm=45.0, man
     else:
         apex, x_ap_pixel, d_ap_pixel, method = compute_apex_baumgaertner(kp)
     
-    # TAD-AP
     tad_ap_pixel_based = x_ap_pixel * pixel_spacing_mm
     if d_ap_pixel > 0:
         tad_ap_baumgaertner = (x_ap_pixel / d_ap_pixel) * D_true_mm
@@ -110,7 +94,7 @@ def compute_pfn_parameters(keypoints, pixel_spacing_mm=0.14, D_true_mm=45.0, man
     if nsa < 90:
         nsa = 180 - nsa
     
-    # Cleveland Zon
+    # Cleveland
     lateral_to_medial_x = kp['head_medial'][0] - kp['head_lateral'][0]
     if abs(lateral_to_medial_x) > 1:
         x_ratio = (kp['screw_tip'][0] - kp['head_lateral'][0]) / lateral_to_medial_x
@@ -185,10 +169,10 @@ def calculate_failure_risk(params):
     tad = params['TAD_AP_mm']
     if tad > 15:
         score += 30
-        risk_factors.append(f"TAD-AP>15mm ({tad}mm) - cut-out riski")
+        risk_factors.append(f"TAD>15mm ({tad}mm) - cut-out riski")
     elif tad > 10:
         score += 15
-        risk_factors.append(f"TAD-AP 10-15mm ({tad}mm) - sinirda")
+        risk_factors.append(f"TAD 10-15mm ({tad}mm) - sinirda")
     
     nsa = params['NSA_deg']
     if nsa < 120:
@@ -208,7 +192,7 @@ def calculate_failure_risk(params):
     pr = params['Parker_ratio']
     if pr < 0.4:
         score += 15
-        risk_factors.append(f"Parker AP {pr} - SUPERIOR malpozisyon (cut-out riski)")
+        risk_factors.append(f"Parker AP {pr} - SUPERIOR malpozisyon")
     elif pr > 0.6:
         score += 10
         risk_factors.append(f"Parker AP {pr} - INFERIOR malpozisyon")

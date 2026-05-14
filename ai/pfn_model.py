@@ -1,12 +1,11 @@
 """
-PFN Keypoint AI Modeli (postop AP veya LAT)
-best.pt'yi yukler ve 9 anatomik keypoint tespit eder.
+PFN Keypoint AI Modeli (postop AP veya LAT) - best.pt
+9 anatomik keypoint tespit eder + otomatik yon
 """
 import os
 from pathlib import Path
 from threading import Lock
 from PIL import Image
-import numpy as np
 
 _model = None
 _model_lock = Lock()
@@ -21,7 +20,7 @@ KEYPOINT_NAMES = [
 
 
 def get_pfn_model():
-    """Lazy load, thread-safe"""
+    """Lazy load thread-safe"""
     global _model
     if _model is None:
         with _model_lock:
@@ -39,14 +38,7 @@ def get_pfn_model():
 
 
 def predict_with_auto_orientation(image_path, min_confidence=0.3):
-    """
-    Hem orijinal hem flip ile dene, yuksek confidence olani sec.
-    
-    Returns:
-        result: YOLO result veya None
-        was_flipped: bool
-        confidence: float
-    """
+    """Hem orijinal hem flip ile dene, yuksek confidence olani sec"""
     model = get_pfn_model()
     
     results_orig = model.predict(image_path, conf=min_confidence, verbose=False)
@@ -85,24 +77,7 @@ def map_keypoints_back(kp_array, image_width):
 
 
 def predict_keypoints(image_path, side='auto'):
-    """
-    Bir grafide 9 anatomik keypoint tespit et.
-    
-    Parameters:
-        image_path: str
-        side: 'auto' / 'right' / 'left'
-    
-    Returns:
-        dict: {
-            'success': bool,
-            'keypoints': {name: [x,y]},
-            'detected_side': 'right' / 'left',
-            'detection_confidence': float,
-            'image_width': int,
-            'image_height': int,
-            'error': str  # basarisiz olunca
-        }
-    """
+    """9 anatomik keypoint tespit et"""
     model = get_pfn_model()
     img = Image.open(image_path)
     image_width = img.width
@@ -141,7 +116,6 @@ def predict_keypoints(image_path, side='auto'):
             'error': f'9 keypoint bekleniyor, {len(kp_array)} bulundu'
         }
     
-    # Flip yapildiysa orijinal koordinatlara geri map et
     if was_flipped:
         kp_array = map_keypoints_back(kp_array, image_width)
     

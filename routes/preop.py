@@ -1,20 +1,18 @@
 """
 Preoperatif AO Siniflama AI endpoint'i
 """
-import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 from io import BytesIO
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, session
 from PIL import Image, ImageOps
 import numpy as np
 
 from models import db, Patient, PreopAnalysis
-from ai.ao_model import get_ao_model, classify_fracture
+from ai.ao_model import classify_fracture
 
-# DICOM destegi
 try:
     import pydicom
     DICOM_AVAILABLE = True
@@ -25,6 +23,21 @@ preop_bp = Blueprint('preop', __name__, url_prefix='/api/preop')
 
 UPLOAD_DIR = Path(__file__).parent.parent / 'static' / 'uploads'
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def require_doctor_or_admin():
+    if session.get('role') not in ('doctor', 'admin'):
+        return jsonify({'error': 'Giris yapmalisiniz'}), 401
+    return None
+
+
+def check_patient_access(patient_id):
+    """Doktor sadece kendi olusturdugu hastaya erisebilir"""
+    if session.get('role') == 'doctor':
+        created = session.get('created_patients', [])
+        if patient_id not in created:
+            return jsonify({'error': 'Bu hastaya erisim yetkiniz yok'}), 403
+    return None
 
 
 def is_dicom(file_bytes, filename=""):
@@ -55,23 +68,14 @@ def read_dicom_to_pil(file_bytes):
     else:
         pil_img = Image.fromarray(normalized).convert('RGB')
     
-    metadata = {
-        'is_dicom': True,
-        'patient_name': str(getattr(ds, 'PatientName', '')) or None,
-        'patient_id': str(getattr(ds, 'PatientID', '')) or None,
-        'study_date': str(getattr(ds, 'StudyDate', '')) or None,
-        'modality': str(getattr(ds, 'Modality', '')) or None,
-    }
-    return pil_img, metadata
+    return pil_img
 
 
 def load_image_from_upload(file):
-    """Yuklenen dosyayi PIL Image'e cevir (DICOM dahil)"""
     file_bytes = file.read()
     
     if is_dicom(file_bytes, file.filename):
-        img, _ = read_dicom_to_pil(file_bytes)
-        return img
+        return read_dicom_to_pil(file_bytes)
     
     img = Image.open(BytesIO(file_bytes))
     
@@ -94,10 +98,13 @@ def load_image_from_upload(file):
 
 @preop_bp.route('/<int:patient_id>/analyze', methods=['POST'])
 def analyze_preop(patient_id):
-    """
-    Preop grafi yukle ve AO siniflamasi yap.
-    Body: form-data 'image' = dosya
-    """
+    """Preop grafi yukle ve AO siniflamasi yap"""
+    auth = require_doctor_or_admin()
+    if auth: return auth
+    
+    access = check_patient_access(patient_id)
+    if access: return access
+    
     try:
         patient = Patient.query.get_or_404(patient_id)
         
@@ -108,17 +115,14 @@ def analyze_preop(patient_id):
         if file.filename == '':
             return jsonify({'error': 'Dosya secilmedi'}), 400
         
-        # Goruntuyu yukle
         img = load_image_from_upload(file)
         
-        # Diskte kaydet
         unique_id = uuid.uuid4().hex[:8]
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         filename = f'preop_{patient_id}_{timestamp}_{unique_id}.jpg'
         save_path = UPLOAD_DIR / filename
         img.save(save_path, 'JPEG', quality=90)
         
-        # AI ile siniflama
         try:
             result = classify_fracture(str(save_path))
         except Exception as ai_err:
@@ -135,7 +139,6 @@ def analyze_preop(patient_id):
             db.session.delete(existing)
             db.session.flush()
         
-        # Yeni kayit
         analysis = PreopAnalysis(
             patient_id=patient_id,
             image_filename=filename,
@@ -152,7 +155,6 @@ def analyze_preop(patient_id):
         return jsonify({
             'success': True,
             'analysis': analysis.to_dict(),
-            'all_predictions': result.get('all_predictions', []),
         })
         
     except Exception as e:
@@ -164,7 +166,13 @@ def analyze_preop(patient_id):
 
 @preop_bp.route('/<int:patient_id>/correct', methods=['PUT'])
 def correct_preop(patient_id):
-    """AO sinifini manuel olarak duzelt"""
+    """AO sinifini manuel duzelt"""
+    auth = require_doctor_or_admin()
+    if auth: return auth
+    
+    access = check_patient_access(patient_id)
+    if access: return access
+    
     try:
         analysis = PreopAnalysis.query.filter_by(patient_id=patient_id).first()
         if not analysis:
@@ -176,10 +184,6 @@ def correct_preop(patient_id):
             analysis.manual_class = data['manual_class']
             analysis.manual_corrected = bool(data['manual_class'])
         
-        for field in ['fracture_displacement', 'lateral_wall_integrity', 'notes']:
-            if field in data:
-                setattr(analysis, field, data[field])
-        
         db.session.commit()
         return jsonify({'success': True, 'analysis': analysis.to_dict()})
         
@@ -188,18 +192,14 @@ def correct_preop(patient_id):
         return jsonify({'error': str(e)}), 500
 
 
-@preop_bp.route('/<int:patient_id>', methods=['GET'])
-def get_preop(patient_id):
-    """Preop analiz bilgisini dondur"""
-    analysis = PreopAnalysis.query.filter_by(patient_id=patient_id).first()
-    if not analysis:
-        return jsonify({'success': True, 'analysis': None})
-    return jsonify({'success': True, 'analysis': analysis.to_dict()})
-
-
 @preop_bp.route('/<int:patient_id>', methods=['DELETE'])
 def delete_preop(patient_id):
-    """Preop analizi sil"""
+    auth = require_doctor_or_admin()
+    if auth: return auth
+    
+    access = check_patient_access(patient_id)
+    if access: return access
+    
     try:
         analysis = PreopAnalysis.query.filter_by(patient_id=patient_id).first()
         if not analysis:

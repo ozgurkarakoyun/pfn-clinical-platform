@@ -1,26 +1,38 @@
 """
-Hasta CRUD endpoint'leri
+Sadelestirilmis Hasta CRUD endpoint'leri.
+- Doktor: sadece kendi olusturdugu hastalari gorebilir
+- Admin: tum hastalara erisim
 """
-from datetime import datetime, date
-from flask import Blueprint, request, jsonify, current_app
-from models import db, Patient, Surgery
+from datetime import datetime
+from flask import Blueprint, request, jsonify, session
+from models import db, Patient
 
 patients_bp = Blueprint('patients', __name__, url_prefix='/api/patients')
 
 
-def parse_date(date_str):
-    """ISO string'i date'e cevir, None ise None don"""
-    if not date_str:
-        return None
-    try:
-        return datetime.strptime(date_str, '%Y-%m-%d').date()
-    except (ValueError, TypeError):
-        return None
+def require_doctor_or_admin():
+    """Decorator alternatifi: 401 don eger yetki yoksa"""
+    if session.get('role') not in ('doctor', 'admin'):
+        return jsonify({'error': 'Giris yapmalisiniz'}), 401
+    return None
+
+
+def require_admin():
+    if session.get('role') != 'admin':
+        return jsonify({'error': 'Admin yetkisi gerekli'}), 403
+    return None
 
 
 @patients_bp.route('', methods=['POST'])
 def create_patient():
-    """Yeni hasta kaydi"""
+    """
+    Yeni hasta kaydi (doktor veya admin).
+    Doktor: session'a created_patients listesine eklenir.
+    """
+    auth = require_doctor_or_admin()
+    if auth:
+        return auth
+    
     try:
         data = request.get_json() or {}
         
@@ -33,52 +45,26 @@ def create_patient():
         if data['side'] not in ('right', 'left'):
             return jsonify({'error': 'Taraf right veya left olmali'}), 400
         
-        # Tarih farkindan delay_days hesapla
-        fracture_date = parse_date(data.get('fracture_date'))
-        surgery_date = parse_date(data.get('surgery_date'))
-        delay_days = None
-        if fracture_date and surgery_date:
-            delay_days = (surgery_date - fracture_date).days
-        
         patient = Patient(
-            hospital_code=data.get('hospital_code'),
             age=int(data['age']),
             sex=data['sex'],
             side=data['side'],
-            weight_kg=data.get('weight_kg'),
-            height_cm=data.get('height_cm'),
-            fracture_date=fracture_date,
-            surgery_date=surgery_date,
-            delay_days=delay_days,
-            asa_score=data.get('asa_score'),
-            comorbidities=data.get('comorbidities', []),
-            anticoagulant=data.get('anticoagulant', False),
-            pre_fracture_mobility=data.get('pre_fracture_mobility'),
-            notes=data.get('notes'),
+            nail_brand=data.get('nail_brand'),
+            outcome=data.get('outcome', 'pending'),
+            outcome_notes=data.get('outcome_notes'),
+            created_by=session.get('name', 'Unknown'),
         )
         
         db.session.add(patient)
-        db.session.flush()  # ID'yi al
-        
-        # Cerrahi bilgileri varsa kaydet
-        surgery_data = data.get('surgery')
-        if surgery_data:
-            surgery = Surgery(
-                patient_id=patient.id,
-                nail_brand=surgery_data.get('nail_brand'),
-                nail_length_mm=surgery_data.get('nail_length_mm'),
-                nail_angle_deg=surgery_data.get('nail_angle_deg'),
-                nail_diameter_mm=surgery_data.get('nail_diameter_mm'),
-                lag_screw_type=surgery_data.get('lag_screw_type'),
-                locking_mode=surgery_data.get('locking_mode'),
-                operation_duration_min=surgery_data.get('operation_duration_min'),
-                blood_loss_ml=surgery_data.get('blood_loss_ml'),
-                surgeon_experience=surgery_data.get('surgeon_experience'),
-                notes=surgery_data.get('notes'),
-            )
-            db.session.add(surgery)
-        
         db.session.commit()
+        
+        # Doktor session'ina kaydet (sonradan erisebilsin)
+        if session.get('role') == 'doctor':
+            created = session.get('created_patients', [])
+            if patient.id not in created:
+                created.append(patient.id)
+                session['created_patients'] = created
+                session.modified = True
         
         return jsonify({
             'success': True,
@@ -94,13 +80,21 @@ def create_patient():
 
 @patients_bp.route('', methods=['GET'])
 def list_patients():
-    """Hasta listesi (sayfalandirilmis)"""
+    """
+    Hasta listesi - SADECE ADMIN.
+    Doktor listeyi goremez.
+    """
+    auth = require_admin()
+    if auth:
+        return auth
+    
     try:
         page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 20)), 100)
-        search = request.args.get('search', '').strip()
+        per_page = min(int(request.args.get('per_page', 50)), 200)
         side_filter = request.args.get('side')
         sex_filter = request.args.get('sex')
+        outcome_filter = request.args.get('outcome')
+        nail_filter = request.args.get('nail_brand')
         
         query = Patient.query
         
@@ -108,8 +102,10 @@ def list_patients():
             query = query.filter_by(side=side_filter)
         if sex_filter:
             query = query.filter_by(sex=sex_filter)
-        if search:
-            query = query.filter(Patient.hospital_code.ilike(f'%{search}%'))
+        if outcome_filter:
+            query = query.filter_by(outcome=outcome_filter)
+        if nail_filter:
+            query = query.filter_by(nail_brand=nail_filter)
         
         query = query.order_by(Patient.created_at.desc())
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -131,15 +127,27 @@ def list_patients():
 
 @patients_bp.route('/<int:patient_id>', methods=['GET'])
 def get_patient(patient_id):
-    """Hasta detayi (analiz ve takip dahil)"""
+    """
+    Hasta detay.
+    Doktor: sadece kendi olusturdugu hastayi (session check)
+    Admin: tum hastalar
+    """
+    auth = require_doctor_or_admin()
+    if auth:
+        return auth
+    
+    # Doktor session check
+    if session.get('role') == 'doctor':
+        created = session.get('created_patients', [])
+        if patient_id not in created:
+            return jsonify({'error': 'Bu hastaya erisim yetkiniz yok'}), 403
+    
     try:
         patient = Patient.query.get_or_404(patient_id)
         
         data = patient.to_dict(detailed=True)
-        data['surgery'] = patient.surgery.to_dict() if patient.surgery else None
         data['preop_analysis'] = patient.preop_analysis.to_dict() if patient.preop_analysis else None
         data['postop_analyses'] = [p.to_dict() for p in patient.postop_analyses.all()]
-        data['followups'] = [f.to_dict() for f in patient.followups.all()]
         
         return jsonify({'success': True, 'patient': data})
         
@@ -149,25 +157,26 @@ def get_patient(patient_id):
 
 @patients_bp.route('/<int:patient_id>', methods=['PUT'])
 def update_patient(patient_id):
-    """Hasta bilgilerini guncelle"""
+    """
+    Hasta guncelle - sonuc (outcome) eklemek icin.
+    Doktor sadece kendi olusturdugu hastayi guncelleyebilir.
+    """
+    auth = require_doctor_or_admin()
+    if auth:
+        return auth
+    
+    if session.get('role') == 'doctor':
+        created = session.get('created_patients', [])
+        if patient_id not in created:
+            return jsonify({'error': 'Bu hastayi guncelleyemezsiniz'}), 403
+    
     try:
         patient = Patient.query.get_or_404(patient_id)
         data = request.get_json() or {}
         
-        for field in ['hospital_code', 'age', 'sex', 'side', 'weight_kg', 'height_cm',
-                      'asa_score', 'comorbidities', 'anticoagulant',
-                      'pre_fracture_mobility', 'notes']:
+        for field in ['age', 'sex', 'side', 'nail_brand', 'outcome', 'outcome_notes']:
             if field in data:
                 setattr(patient, field, data[field])
-        
-        if 'fracture_date' in data:
-            patient.fracture_date = parse_date(data['fracture_date'])
-        if 'surgery_date' in data:
-            patient.surgery_date = parse_date(data['surgery_date'])
-        
-        # delay_days yeniden hesapla
-        if patient.fracture_date and patient.surgery_date:
-            patient.delay_days = (patient.surgery_date - patient.fracture_date).days
         
         db.session.commit()
         return jsonify({'success': True, 'patient': patient.to_dict(detailed=True)})
@@ -179,7 +188,11 @@ def update_patient(patient_id):
 
 @patients_bp.route('/<int:patient_id>', methods=['DELETE'])
 def delete_patient(patient_id):
-    """Hastayi sil (tum iliskili veriler cascade)"""
+    """Hastayi sil - SADECE ADMIN."""
+    auth = require_admin()
+    if auth:
+        return auth
+    
     try:
         patient = Patient.query.get_or_404(patient_id)
         db.session.delete(patient)
@@ -191,66 +204,124 @@ def delete_patient(patient_id):
         return jsonify({'error': str(e)}), 500
 
 
-@patients_bp.route('/<int:patient_id>/surgery', methods=['POST', 'PUT'])
-def upsert_surgery(patient_id):
-    """Cerrahi bilgileri ekle veya guncelle"""
-    try:
-        patient = Patient.query.get_or_404(patient_id)
-        data = request.get_json() or {}
-        
-        if patient.surgery:
-            surgery = patient.surgery
-            for field in ['nail_brand', 'nail_length_mm', 'nail_angle_deg',
-                          'nail_diameter_mm', 'lag_screw_type', 'locking_mode',
-                          'operation_duration_min', 'blood_loss_ml',
-                          'surgeon_experience', 'notes']:
-                if field in data:
-                    setattr(surgery, field, data[field])
-        else:
-            surgery = Surgery(patient_id=patient_id, **{k: v for k, v in data.items() 
-                              if k in ['nail_brand', 'nail_length_mm', 'nail_angle_deg',
-                                       'nail_diameter_mm', 'lag_screw_type', 'locking_mode',
-                                       'operation_duration_min', 'blood_loss_ml',
-                                       'surgeon_experience', 'notes']})
-            db.session.add(surgery)
-        
-        db.session.commit()
-        return jsonify({'success': True, 'surgery': surgery.to_dict()})
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
-
-
 @patients_bp.route('/stats', methods=['GET'])
 def patient_stats():
-    """Genel istatistikler"""
+    """Genel istatistikler - SADECE ADMIN."""
+    auth = require_admin()
+    if auth:
+        return auth
+    
     try:
+        from sqlalchemy import func
+        
         total = Patient.query.count()
         male = Patient.query.filter_by(sex='M').count()
         female = Patient.query.filter_by(sex='F').count()
         right = Patient.query.filter_by(side='right').count()
         left = Patient.query.filter_by(side='left').count()
         
-        # Yas dagilimi
-        from sqlalchemy import func
+        # Outcome dagilimi
+        union = Patient.query.filter_by(outcome='union').count()
+        failure = Patient.query.filter_by(outcome='failure').count()
+        pending = Patient.query.filter(
+            (Patient.outcome == 'pending') | (Patient.outcome == None)
+        ).count()
+        
+        # Yas
         age_stats = db.session.query(
             func.avg(Patient.age),
             func.min(Patient.age),
             func.max(Patient.age),
         ).first()
         
+        # Civi markasi dagilimi
+        nail_dist = db.session.query(
+            Patient.nail_brand, func.count(Patient.id)
+        ).group_by(Patient.nail_brand).all()
+        
         return jsonify({
             'success': True,
             'total': total,
             'sex': {'male': male, 'female': female},
             'side': {'right': right, 'left': left},
+            'outcome': {
+                'union': union,
+                'failure': failure,
+                'pending': pending,
+                'failure_rate': failure / max(total, 1),
+            },
             'age': {
                 'mean': float(age_stats[0]) if age_stats[0] else None,
                 'min': age_stats[1],
                 'max': age_stats[2],
-            }
+            },
+            'nail_brands': [
+                {'brand': brand or 'Belirsiz', 'count': count}
+                for brand, count in nail_dist
+            ],
         })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@patients_bp.route('/export-csv', methods=['GET'])
+def export_csv():
+    """Tum verileri CSV olarak indir - SADECE ADMIN."""
+    auth = require_admin()
+    if auth:
+        return auth
+    
+    try:
+        import csv
+        import io
+        from flask import Response
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow([
+            'patient_id', 'age', 'sex', 'side', 'nail_brand', 'outcome',
+            'preop_ao_class', 'preop_confidence',
+            'postop_ap_tad', 'postop_ap_nsa', 'postop_ap_cleveland', 'postop_ap_parker_ap',
+            'postop_ap_risk_score', 'postop_ap_risk_category',
+            'postop_lat_tad', 'has_lat',
+            'created_by', 'created_at'
+        ])
+        
+        for p in Patient.query.order_by(Patient.id).all():
+            preop = p.preop_analysis
+            postop_ap_list = p.postop_analyses.filter_by(view_type='AP').all()
+            postop_lat_list = p.postop_analyses.filter_by(view_type='LAT').all()
+            
+            ap = postop_ap_list[0] if postop_ap_list else None
+            lat = postop_lat_list[0] if postop_lat_list else None
+            
+            writer.writerow([
+                p.id, p.age, p.sex, p.side, p.nail_brand or '', p.outcome or 'pending',
+                (preop.final_class if preop else ''),
+                (preop.ai_confidence if preop else ''),
+                (ap.tad_ap_mm if ap else ''),
+                (ap.nsa_deg if ap else ''),
+                (ap.cleveland_zone if ap else ''),
+                (ap.parker_ap_ratio if ap else ''),
+                (ap.risk_score if ap else ''),
+                (ap.risk_category if ap else ''),
+                (lat.tad_lat_mm if lat else ''),
+                ('yes' if lat else 'no'),
+                p.created_by or '',
+                p.created_at.isoformat() if p.created_at else '',
+            ])
+        
+        csv_data = output.getvalue()
+        output.close()
+        
+        return Response(
+            csv_data,
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment; filename=pfn_data.csv'}
+        )
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Giris - PFN Klinik Arastirma</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-card {
+  background: white;
+  border-radius: 14px;
+  padding: 32px 28px;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 6px;
+  text-align: center;
+}
+.subtitle {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 24px;
+  text-align: center;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 8px;
+}
+.tab {
+  flex: 1;
+  padding: 9px;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  transition: all 0.15s;
+}
+.tab.active {
+  background: white;
+  color: #1e40af;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.form-group { margin-bottom: 14px; }
+.form-group label {
+  display: block;
+  color: #475569;
+  font-size: 13px;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+.form-group input {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 15px;
+  transition: border 0.15s;
+}
+.form-group input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+.btn-login {
+  width: 100%;
+  padding: 12px;
+  background: #1e40af;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 6px;
+}
+.btn-login:hover { background: #1e3a8a; }
+.alert {
+  padding: 10px 13px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+.alert-error { background: #fee2e2; color: #991b1b; }
+.helper {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 14px;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div class="login-card">
+  <div class="title">PFN Klinik Arastirma Platformu</div>
+  <div class="subtitle">Giris yapin</div>
+  
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('doctor')">Doktor</div>
+    <div class="tab" onclick="switchTab('admin')">Admin</div>
+  </div>
+  
+  <div class="tab-content active" id="doctor-tab">
+    <div class="form-group">
+      <label>Adiniz Soyadiniz (opsiyonel)</label>
+      <input type="text" id="doctor_name" placeholder="orn. Dr. Mehmet">
+    </div>
+    <div class="form-group">
+      <label>Erisim Kodu</label>
+      <input type="password" id="doctor_code" placeholder="Calisma koordinatorunden alin">
+    </div>
+    <button class="btn-login" onclick="doctorLogin()">Giris Yap</button>
+    <div class="helper">Erisim kodunuzu calisma sorumlusundan alabilirsiniz</div>
+  </div>
+  
+  <div class="tab-content" id="admin-tab">
+    <div class="form-group">
+      <label>Kullanici Adi</label>
+      <input type="text" id="admin_username">
+    </div>
+    <div class="form-group">
+      <label>Sifre</label>
+      <input type="password" id="admin_password">
+    </div>
+    <button class="btn-login" onclick="adminLogin()">Admin Girisi</button>
+  </div>
+  
+  <div id="loginError"></div>
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(name + '-tab').classList.add('active');
+  document.getElementById('loginError').innerHTML = '';
+}
+
+async function doctorLogin() {
+  const code = document.getElementById('doctor_code').value;
+  const doctor_name = document.getElementById('doctor_name').value;
+  
+  if (!code) {
+    showError('Erisim kodu girin');
+    return;
+  }
+  
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({login_type: 'doctor', code, doctor_name}),
+    });
+    const data = await res.json();
+    
+    if (data.success) {
+      window.location = data.redirect;
+    } else {
+      showError(data.error);
+    }
+  } catch (e) {
+    showError('Baglanti hatasi: ' + e.message);
+  }
+}
+
+async function adminLogin() {
+  const username = document.getElementById('admin_username').value;
+  const password = document.getElementById('admin_password').value;
+  
+  if (!username || !password) {
+    showError('Kullanici adi ve sifre girin');
+    return;
+  }
+  
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({login_type: 'admin', username, password}),
+    });
+    const data = await res.json();
+    
+    if (data.success) {
+      window.location = data.redirect;
+    } else {
+      showError(data.error);
+    }
+  } catch (e) {
+    showError('Baglanti hatasi: ' + e.message);
+  }
+}
+
+function showError(msg) {
+  document.getElementById('loginError').innerHTML = `<div class="alert alert-error">${msg}</div>`;
+}
+
+// Enter ile submit
+document.getElementById('doctor_code').addEventListener('keypress', e => {
+  if (e.key === 'Enter') doctorLogin();
+});
+document.getElementById('admin_password').addEventListener('keypress', e => {
+  if (e.key === 'Enter') adminLogin();
+});
+</script>
+</body>
+</html>

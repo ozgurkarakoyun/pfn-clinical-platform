@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Istatistikler - PFN Platform{% endblock %}
+
+{% block nav_links %}
+<a href="/admin" class="nav-link">Hasta Listesi</a>
+<a href="/admin/dashboard" class="nav-link primary">Istatistikler</a>
+{% endblock %}
+
+{% block extra_css %}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.stat-card {
+  background: white;
+  padding: 18px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  border-left: 4px solid #3b82f6;
+}
+.stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 6px; }
+.stat-value { font-size: 28px; font-weight: 700; color: #1e293b; }
+.stat-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.bar-row .name { width: 100px; font-size: 13px; }
+.bar-row .bar { flex: 1; height: 22px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+.bar-row .bar-fill { height: 100%; background: #3b82f6; transition: width 0.3s; }
+.bar-row .count { font-size: 13px; min-width: 50px; text-align: right; }
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2 class="section-title">Genel Istatistikler</h2>
+  <div id="statsContainer"><div class="spinner"></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadStats() {
+  try {
+    const res = await fetch('/api/patients/stats');
+    const p = await res.json();
+    
+    if (!p.success) {
+      document.getElementById('statsContainer').innerHTML = `<div class="alert alert-error">${p.error || 'Hata'}</div>`;
+      return;
+    }
+    
+    const failureRate = (p.outcome.failure_rate * 100).toFixed(1);
+    
+    let html = `
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Toplam Hasta</div>
+          <div class="stat-value">${p.total || 0}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Cinsiyet (E / K)</div>
+          <div class="stat-value">${p.sex.male || 0} / ${p.sex.female || 0}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Taraf (Sag / Sol)</div>
+          <div class="stat-value">${p.side.right || 0} / ${p.side.left || 0}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Yas Ortalamasi</div>
+          <div class="stat-value">${p.age.mean ? p.age.mean.toFixed(1) : '-'}</div>
+          <div class="stat-sub">${p.age.min || '-'} - ${p.age.max || '-'}</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#10b981">
+          <div class="stat-label">Normal Kaynama</div>
+          <div class="stat-value">${p.outcome.union || 0}</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#ef4444">
+          <div class="stat-label">Failure (cut-out)</div>
+          <div class="stat-value">${p.outcome.failure || 0}</div>
+          <div class="stat-sub">${failureRate}% failure rate</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#94a3b8">
+          <div class="stat-label">Belirsiz / Bekleyen</div>
+          <div class="stat-value">${p.outcome.pending || 0}</div>
+        </div>
+      </div>
+    `;
+    
+    // Civi markasi dagilimi
+    if (p.nail_brands && p.nail_brands.length > 0) {
+      const maxCount = Math.max(...p.nail_brands.map(n => n.count));
+      html += '<div class="card"><h3 class="section-title">Civi Markasi Dagilimi</h3>';
+      for (const nb of p.nail_brands) {
+        const pct = (nb.count / maxCount) * 100;
+        html += `
+          <div class="bar-row">
+            <div class="name">${nb.brand}</div>
+            <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+            <div class="count">${nb.count}</div>
+          </div>
+        `;
+      }
+      html += '</div>';
+    }
+    
+    html += `
+      <div class="alert alert-info" style="margin-top:14px">
+        <strong>CSV Export:</strong> Tum hasta verilerini istatistiksel analiz icin <a href="/api/patients/export-csv" download style="color:#1e3a8a;font-weight:600">CSV olarak indirebilirsiniz</a>.
+      </div>
+    `;
+    
+    document.getElementById('statsContainer').innerHTML = html;
+  } catch (e) {
+    document.getElementById('statsContainer').innerHTML = `<div class="alert alert-error">Hata: ${e.message}</div>`;
+  }
+}
+
+loadStats();
+</script>
+{% endblock %}
