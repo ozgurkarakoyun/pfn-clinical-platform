@@ -47,6 +47,20 @@ from models import db
 db.init_app(app)
 migrate = Migrate(app, db)
 
+
+# Uygulama baslarken tablolari otomatik olustur
+# Bu Railway'de release komutu calismassa garanti saglar
+def _ensure_tables():
+    """Tablolari olustur (yoksa). Idempotent - varsa dokunmaz."""
+    try:
+        with app.app_context():
+            db.create_all()
+            print('[DB] Tablolar olusturuldu/dogrulandi')
+    except Exception as e:
+        print(f'[DB HATA] Tablolar olusturulamadi: {e}')
+
+_ensure_tables()
+
 # Decorators
 def admin_required(f):
     @wraps(f)
