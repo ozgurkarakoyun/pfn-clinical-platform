@@ -1,0 +1,15 @@
+flask==3.0.0
+flask-cors==4.0.0
+flask-sqlalchemy==3.1.1
+flask-migrate==4.0.5
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+ultralytics==8.3.0
+pillow==10.0.0
+numpy<2.0
+pydicom==2.4.4
+pylibjpeg==2.0.0
+pylibjpeg-libjpeg==2.1.0
+python-gdcm==3.0.24.1
+gunicorn==21.2.0
+opencv-python-headless==4.8.1.78

@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% block title %}Yeni Hasta - PFN Platform{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2 class="section-title">Yeni Hasta Kaydi</h2>
+  
+  <form id="newPatientForm">
+    <h3 style="margin-bottom:14px;color:#1e40af">Demografik Bilgiler</h3>
+    <div class="form-row-3">
+      <div class="form-group">
+        <label>Hastane Kodu (anonim)</label>
+        <input type="text" id="hospital_code" placeholder="orn. PFN-001">
+      </div>
+      <div class="form-group">
+        <label>Yas *</label>
+        <input type="number" id="age" required min="0" max="120">
+      </div>
+      <div class="form-group">
+        <label>Cinsiyet *</label>
+        <select id="sex" required>
+          <option value="">Secin...</option>
+          <option value="M">Erkek</option>
+          <option value="F">Kadin</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="form-row-3">
+      <div class="form-group">
+        <label>Kirik Tarafi *</label>
+        <select id="side" required>
+          <option value="">Secin...</option>
+          <option value="right">Sag</option>
+          <option value="left">Sol</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Kilo (kg)</label>
+        <input type="number" id="weight_kg" step="0.1" min="0">
+      </div>
+      <div class="form-group">
+        <label>Boy (cm)</label>
+        <input type="number" id="height_cm" step="0.1" min="0">
+      </div>
+    </div>
+    
+    <h3 style="margin:24px 0 14px;color:#1e40af">Klinik Bilgiler</h3>
+    <div class="form-row-3">
+      <div class="form-group">
+        <label>Kirik Tarihi</label>
+        <input type="date" id="fracture_date">
+      </div>
+      <div class="form-group">
+        <label>Ameliyat Tarihi</label>
+        <input type="date" id="surgery_date">
+      </div>
+      <div class="form-group">
+        <label>ASA Skoru</label>
+        <select id="asa_score">
+          <option value="">Secin...</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label>Komorbiditeler</label>
+      <div id="comorbidities" style="display:flex;gap:14px;flex-wrap:wrap;padding:10px;background:#f8fafc;border-radius:6px">
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+          <input type="checkbox" name="comorbidity" value="HT"> Hipertansiyon
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+          <input type="checkbox" name="comorbidity" value="DM"> Diabetes Mellitus
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+          <input type="checkbox" name="comorbidity" value="KOAH"> KOAH
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+          <input type="checkbox" name="comorbidity" value="CAD"> Koroner Arter Hastaligi
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+          <input type="checkbox" name="comorbidity" value="CHF"> Konjestif Kalp Yetmezligi
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+          <input type="checkbox" name="comorbidity" value="CKD"> Kronik Bobrek Hastaligi
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+          <input type="checkbox" name="comorbidity" value="Dementia"> Demans
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-weight:normal;cursor:pointer">
+          <input type="checkbox" name="comorbidity" value="Stroke"> SVO oykusu
+        </label>
+      </div>
+    </div>
+    
+    <div class="form-row">
+      <div class="form-group">
+        <label>Antikoagulan Kullanimi</label>
+        <select id="anticoagulant">
+          <option value="false">Hayir</option>
+          <option value="true">Evet</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Pre-fraktur Mobilite</label>
+        <select id="pre_fracture_mobility">
+          <option value="">Secin...</option>
+          <option value="independent">Bagimsiz</option>
+          <option value="cane">Baston ile</option>
+          <option value="walker">Walker ile</option>
+          <option value="wheelchair">Tekerlekli sandalye</option>
+          <option value="bedridden">Yatakta</option>
+        </select>
+      </div>
+    </div>
+    
+    <h3 style="margin:24px 0 14px;color:#1e40af">Cerrahi Bilgileri</h3>
+    <div class="form-row-3">
+      <div class="form-group">
+        <label>Civi Markasi</label>
+        <select id="nail_brand">
+          <option value="">Secin...</option>
+          <option value="PFNA">PFNA</option>
+          <option value="PFNA-II">PFNA-II</option>
+          <option value="Gamma 3">Gamma 3</option>
+          <option value="TFN">TFN</option>
+          <option value="InterTAN">InterTAN</option>
+          <option value="Trigen INTERTAN">Trigen INTERTAN</option>
+          <option value="Other">Diger</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Civi Acisi (derece)</label>
+        <select id="nail_angle_deg">
+          <option value="">Secin...</option>
+          <option value="125">125°</option>
+          <option value="130">130°</option>
+          <option value="135">135°</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Lag Screw Tipi</label>
+        <select id="lag_screw_type">
+          <option value="">Secin...</option>
+          <option value="helical_blade">Helical blade</option>
+          <option value="threaded_screw">Threaded screw</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="form-row-3">
+      <div class="form-group">
+        <label>Civi Uzunlugu (mm)</label>
+        <input type="number" id="nail_length_mm" min="0">
+      </div>
+      <div class="form-group">
+        <label>Civi Capi (mm)</label>
+        <input type="number" id="nail_diameter_mm" step="0.5" min="0">
+      </div>
+      <div class="form-group">
+        <label>Kilitleme</label>
+        <select id="locking_mode">
+          <option value="">Secin...</option>
+          <option value="static">Statik</option>
+          <option value="dynamic">Dinamik</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="form-row-3">
+      <div class="form-group">
+        <label>Op. Suresi (dk)</label>
+        <input type="number" id="operation_duration_min" min="0">
+      </div>
+      <div class="form-group">
+        <label>Kan Kaybi (ml)</label>
+        <input type="number" id="blood_loss_ml" min="0">
+      </div>
+      <div class="form-group">
+        <label>Cerrah Deneyimi</label>
+        <select id="surgeon_experience">
+          <option value="">Secin...</option>
+          <option value="junior">Yeni (<5 yil)</option>
+          <option value="mid">Orta (5-15 yil)</option>
+          <option value="senior">Deneyimli (>15 yil)</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="form-group">
+      <label>Genel Notlar</label>
+      <textarea id="notes" rows="3"></textarea>
+    </div>
+    
+    <div id="formMessages"></div>
+    
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+      <a href="/" class="btn btn-secondary">Iptal</a>
+      <button type="submit" class="btn btn-primary">Hastayi Kaydet</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('newPatientForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const comorbidities = Array.from(document.querySelectorAll('input[name="comorbidity"]:checked'))
+    .map(cb => cb.value);
+  
+  const data = {
+    hospital_code: document.getElementById('hospital_code').value || null,
+    age: parseInt(document.getElementById('age').value),
+    sex: document.getElementById('sex').value,
+    side: document.getElementById('side').value,
+    weight_kg: parseFloat(document.getElementById('weight_kg').value) || null,
+    height_cm: parseFloat(document.getElementById('height_cm').value) || null,
+    fracture_date: document.getElementById('fracture_date').value || null,
+    surgery_date: document.getElementById('surgery_date').value || null,
+    asa_score: parseInt(document.getElementById('asa_score').value) || null,
+    comorbidities: comorbidities,
+    anticoagulant: document.getElementById('anticoagulant').value === 'true',
+    pre_fracture_mobility: document.getElementById('pre_fracture_mobility').value || null,
+    notes: document.getElementById('notes').value || null,
+    surgery: {
+      nail_brand: document.getElementById('nail_brand').value || null,
+      nail_length_mm: parseInt(document.getElementById('nail_length_mm').value) || null,
+      nail_angle_deg: parseInt(document.getElementById('nail_angle_deg').value) || null,
+      nail_diameter_mm: parseFloat(document.getElementById('nail_diameter_mm').value) || null,
+      lag_screw_type: document.getElementById('lag_screw_type').value || null,
+      locking_mode: document.getElementById('locking_mode').value || null,
+      operation_duration_min: parseInt(document.getElementById('operation_duration_min').value) || null,
+      blood_loss_ml: parseInt(document.getElementById('blood_loss_ml').value) || null,
+      surgeon_experience: document.getElementById('surgeon_experience').value || null,
+    }
+  };
+  
+  const msg = document.getElementById('formMessages');
+  
+  try {
+    const res = await fetch('/api/patients', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    
+    if (result.success) {
+      msg.innerHTML = `<div class="alert alert-success">Hasta basariyla kaydedildi (#${result.patient.id}). Yonlendiriliyor...</div>`;
+      setTimeout(() => {
+        window.location = `/patient/${result.patient.id}`;
+      }, 1000);
+    } else {
+      msg.innerHTML = `<div class="alert alert-error">${result.error || 'Hata olustu'}</div>`;
+    }
+  } catch (err) {
+    msg.innerHTML = `<div class="alert alert-error">Baglanti hatasi: ${err.message}</div>`;
+  }
+});
+</script>
+{% endblock %}

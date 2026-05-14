@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Istatistikler - PFN Platform{% endblock %}
+
+{% block extra_css %}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: white;
+  padding: 18px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  border-left: 4px solid #3b82f6;
+}
+.stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 6px; }
+.stat-value { font-size: 28px; font-weight: 700; color: #1e293b; }
+.stat-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2 class="section-title">Genel Istatistikler</h2>
+  <div id="statsContainer"><div class="spinner"></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadStats() {
+  try {
+    const [patientStats, outcomeStats] = await Promise.all([
+      fetch('/api/patients/stats').then(r => r.json()),
+      fetch('/api/followup/stats/outcomes').then(r => r.json()),
+    ]);
+    
+    const p = patientStats;
+    const o = outcomeStats;
+    
+    document.getElementById('statsContainer').innerHTML = `
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">Toplam Hasta</div>
+          <div class="stat-value">${p.total || 0}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Cinsiyet</div>
+          <div class="stat-value">${p.sex.male || 0} / ${p.sex.female || 0}</div>
+          <div class="stat-sub">E / K</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Taraf</div>
+          <div class="stat-value">${p.side.right || 0} / ${p.side.left || 0}</div>
+          <div class="stat-sub">Sag / Sol</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Yas Ortalamasi</div>
+          <div class="stat-value">${p.age.mean ? p.age.mean.toFixed(1) : '-'}</div>
+          <div class="stat-sub">${p.age.min || '-'} - ${p.age.max || '-'}</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#ef4444">
+          <div class="stat-label">Cut-out</div>
+          <div class="stat-value">${o.cut_out_count || 0}</div>
+          <div class="stat-sub">${((o.failure_rate || 0) * 100).toFixed(1)}% failure</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#f59e0b">
+          <div class="stat-label">Mortality</div>
+          <div class="stat-value">${o.mortality_count || 0}</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#8b5cf6">
+          <div class="stat-label">Toplam Takip</div>
+          <div class="stat-value">${o.total_followups || 0}</div>
+        </div>
+        <div class="stat-card" style="border-left-color:#10b981">
+          <div class="stat-label">Screw Migration</div>
+          <div class="stat-value">${o.screw_migration_count || 0}</div>
+        </div>
+      </div>
+      
+      <div class="alert alert-info">
+        <strong>Bilgi:</strong> Veri biriktikce daha detayli analizler (AO siniflama dagilimi, civi markasi karsilastirmasi, risk faktor analizi) eklenecek.
+      </div>
+    `;
+  } catch (e) {
+    document.getElementById('statsContainer').innerHTML = 
+      `<div class="alert alert-error">Hata: ${e.message}</div>`;
+  }
+}
+
+loadStats();
+</script>
+{% endblock %}

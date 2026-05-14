@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Hasta Listesi - PFN Platform{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+    <h2 class="section-title" style="margin-bottom:0">Hasta Listesi</h2>
+    <a href="/new-patient" class="btn btn-primary">+ Yeni Hasta Ekle</a>
+  </div>
+  
+  <div id="filters" style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <input type="text" id="searchInput" placeholder="Hastane kodu ara..." style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #cbd5e1;border-radius:6px">
+    <select id="sideFilter" style="padding:9px 12px;border:1px solid #cbd5e1;border-radius:6px">
+      <option value="">Tum taraflar</option>
+      <option value="right">Sag</option>
+      <option value="left">Sol</option>
+    </select>
+    <select id="sexFilter" style="padding:9px 12px;border:1px solid #cbd5e1;border-radius:6px">
+      <option value="">Tum cinsiyetler</option>
+      <option value="M">Erkek</option>
+      <option value="F">Kadin</option>
+    </select>
+  </div>
+  
+  <div id="patientList">
+    <div class="spinner"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadPatients() {
+  const search = document.getElementById('searchInput').value;
+  const side = document.getElementById('sideFilter').value;
+  const sex = document.getElementById('sexFilter').value;
+  
+  const params = new URLSearchParams();
+  if (search) params.set('search', search);
+  if (side) params.set('side', side);
+  if (sex) params.set('sex', sex);
+  
+  const container = document.getElementById('patientList');
+  container.innerHTML = '<div class="spinner"></div>';
+  
+  try {
+    const res = await fetch(`/api/patients?${params}`);
+    const data = await res.json();
+    
+    if (!data.success || !data.patients.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <h3>Henuz hasta kaydi yok</h3>
+          <p style="margin:10px 0 20px">Yeni hasta eklemek icin "+ Yeni Hasta" butonuna basin</p>
+          <a href="/new-patient" class="btn btn-primary">+ Yeni Hasta Ekle</a>
+        </div>
+      `;
+      return;
+    }
+    
+    let html = `
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Hastane Kodu</th>
+            <th>Yas</th>
+            <th>Cinsiyet</th>
+            <th>Taraf</th>
+            <th>Preop</th>
+            <th>Postop</th>
+            <th>Takip</th>
+            <th>Tarih</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    for (const p of data.patients) {
+      const date = new Date(p.created_at).toLocaleDateString('tr-TR');
+      const preopBadge = p.has_preop ? '<span class="badge badge-AO-A2">VAR</span>' : '-';
+      html += `
+        <tr style="cursor:pointer" onclick="window.location='/patient/${p.id}'">
+          <td>${p.id}</td>
+          <td>${p.hospital_code || '-'}</td>
+          <td>${p.age}</td>
+          <td>${p.sex === 'M' ? 'E' : 'K'}</td>
+          <td>${p.side === 'right' ? 'Sag' : 'Sol'}</td>
+          <td>${preopBadge}</td>
+          <td>${p.postop_count || 0}</td>
+          <td>${p.followup_count || 0}</td>
+          <td>${date}</td>
+          <td><a href="/patient/${p.id}" class="btn btn-primary" style="padding:5px 10px;font-size:12px">Detay</a></td>
+        </tr>
+      `;
+    }
+    html += '</tbody></table>';
+    
+    if (data.pagination.pages > 1) {
+      html += `<div style="margin-top:14px;color:#64748b;font-size:13px">Toplam ${data.pagination.total} hasta (Sayfa ${data.pagination.page}/${data.pagination.pages})</div>`;
+    }
+    
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<div class="alert alert-error">Hata: ${e.message}</div>`;
+  }
+}
+
+document.getElementById('searchInput').addEventListener('input', () => {
+  clearTimeout(window._searchTimer);
+  window._searchTimer = setTimeout(loadPatients, 300);
+});
+document.getElementById('sideFilter').addEventListener('change', loadPatients);
+document.getElementById('sexFilter').addEventListener('change', loadPatients);
+
+loadPatients();
+</script>
+{% endblock %}
