@@ -37,6 +37,15 @@ BASE_DIR = Path(__file__).parent
 UPLOAD_DIR = BASE_DIR / 'static' / 'uploads'
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# Modelleri startup'ta indir (Google Drive'dan)
+# Bu Railway'de uygulama baslar baslamaz calisir
+try:
+    from model_downloader import ensure_models
+    ensure_models()
+except Exception as e:
+    print(f"[MODEL DOWNLOAD HATA] {e}")
+    print("AI ozellikleri calismayabilir, modeller manuel yuklenebilir.")
+
 # Yetkilendirme kimlikleri (environment variable'dan alir)
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
