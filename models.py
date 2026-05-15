@@ -66,7 +66,7 @@ class PreopAnalysis(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False, unique=True)
     
-    image_filename = db.Column(db.String(255), nullable=False)
+    image_filename = db.Column(db.String(255), nullable=True)  # Manuel only kayit icin null olabilir
     image_width = db.Column(db.Integer, nullable=True)
     image_height = db.Column(db.Integer, nullable=True)
     
@@ -84,11 +84,16 @@ class PreopAnalysis(db.Model):
     def final_class(self):
         return self.manual_class if self.manual_corrected else self.ai_class
     
+    @property
+    def has_image(self):
+        return bool(self.image_filename)
+    
     def to_dict(self):
         return {
             'id': self.id,
             'patient_id': self.patient_id,
-            'image_url': f'/static/uploads/{self.image_filename}',
+            'image_url': f'/static/uploads/{self.image_filename}' if self.image_filename else None,
+            'has_image': self.has_image,
             'ai_class': self.ai_class,
             'ai_confidence': self.ai_confidence,
             'ai_bbox': self.ai_bbox,

@@ -201,6 +201,64 @@ def correct_preop(patient_id):
         return jsonify({'error': str(e)}), 500
 
 
+@preop_bp.route('/<int:patient_id>/manual', methods=['POST'])
+def set_manual_preop(patient_id):
+    """
+    Grafi olmadan manuel AO siniflama kaydet.
+    Hekim grafi yukleyemiyorsa direkt sinif secebilir.
+    """
+    auth = require_doctor_or_admin()
+    if auth: return auth
+    
+    access = check_patient_access(patient_id)
+    if access: return access
+    
+    try:
+        patient = Patient.query.get_or_404(patient_id)
+        data = request.get_json() or {}
+        
+        manual_class = (data.get('manual_class') or '').strip()
+        if not manual_class:
+            return jsonify({'error': 'manual_class zorunlu'}), 400
+        
+        valid_classes = ['31-A1', '31-A2', '31-A3', '31-B', '32-A', '32-B', 'normal']
+        if manual_class not in valid_classes:
+            return jsonify({'error': f'Gecersiz sinif: {manual_class}'}), 400
+        
+        # Mevcut analiz varsa guncelle, yoksa olustur
+        existing = PreopAnalysis.query.filter_by(patient_id=patient_id).first()
+        
+        if existing:
+            # Sadece manuel sinifi guncelle
+            existing.manual_class = manual_class
+            existing.manual_corrected = True
+            db.session.commit()
+            return jsonify({'success': True, 'analysis': existing.to_dict()})
+        else:
+            # Yeni manuel-only analiz olustur (gorsel yok)
+            analysis = PreopAnalysis(
+                patient_id=patient_id,
+                image_filename='',  # Bos - grafi yok
+                image_width=None,
+                image_height=None,
+                ai_class=None,
+                ai_confidence=None,
+                ai_bbox=None,
+                ai_all_predictions=[],
+                manual_class=manual_class,
+                manual_corrected=True,
+            )
+            db.session.add(analysis)
+            db.session.commit()
+            return jsonify({'success': True, 'analysis': analysis.to_dict()})
+        
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
 @preop_bp.route('/<int:patient_id>', methods=['DELETE'])
 def delete_preop(patient_id):
     auth = require_doctor_or_admin()
@@ -214,9 +272,11 @@ def delete_preop(patient_id):
         if not analysis:
             return jsonify({'error': 'Bulunamadi'}), 404
         
-        old_path = UPLOAD_DIR / analysis.image_filename
-        if old_path.exists():
-            old_path.unlink()
+        # Image dosya silme - manuel-only kayitlarda image_filename bos olabilir
+        if analysis.image_filename:
+            old_path = UPLOAD_DIR / analysis.image_filename
+            if old_path.exists():
+                old_path.unlink()
         
         db.session.delete(analysis)
         db.session.commit()

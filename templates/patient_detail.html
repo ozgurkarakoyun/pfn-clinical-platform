@@ -214,15 +214,47 @@ function getOutcomeLabel(o) {
 function renderPreopSlot() {
   const preop = patientData.preop_analysis;
   
+  // KAYDIN YOK: Grafi yukle veya manuel siniflama
   if (!preop) {
     return `
       <div class="upload-zone" onclick="document.getElementById('preopFile').click()">
         <div style="font-size:36px;margin-bottom:8px;opacity:0.4">📤</div>
-        <div style="font-weight:600;color:#475569">Kirik grafiyi yukle</div>
+        <div style="font-weight:600;color:#475569">Kirik grafiyi sec</div>
         <div style="font-size:12px;color:#94a3b8;margin-top:4px">AI otomatik AO siniflar</div>
         <div style="font-size:11px;color:#94a3b8;margin-top:6px">JPG / PNG / DICOM</div>
       </div>
-      <input type="file" id="preopFile" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPreop(this.files[0])">
+      <input type="file" id="preopFile" accept="image/*,.dcm,.dicom" style="display:none" onchange="onPreopFileSelected(this.files[0])">
+      
+      <!-- Onizleme + Yukle butonu -->
+      <div id="preopPreview" style="display:none;margin-top:10px">
+        <div style="background:#f0f9ff;border:2px solid #3b82f6;border-radius:8px;padding:10px;text-align:center">
+          <img id="preopPreviewImg" style="max-width:100%;max-height:200px;border-radius:4px;margin-bottom:8px">
+          <div id="preopPreviewInfo" style="font-size:11px;color:#475569;margin-bottom:8px"></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-primary" onclick="confirmUploadPreop()" style="font-size:13px;padding:8px;flex:1">📤 Sisteme Yukle ve Analiz Et</button>
+            <button class="btn btn-secondary" onclick="cancelPreopUpload()" style="font-size:13px;padding:8px">Iptal</button>
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top:12px;padding:10px;background:#fef3c7;border-radius:6px;border-left:3px solid #f59e0b">
+        <div style="font-size:12px;color:#92400e;font-weight:600;margin-bottom:6px">
+          📋 Grafi yok mu? Manuel sinif girin:
+        </div>
+        <div style="display:flex;gap:6px">
+          <select id="manualOnlyClass" style="flex:1;padding:6px;border:1px solid #f59e0b;border-radius:5px;font-size:13px;background:white">
+            <option value="">Sinif sec...</option>
+            <option value="31-A1">31-A1 (basit/2-fragman)</option>
+            <option value="31-A2">31-A2 (multifragmenter)</option>
+            <option value="31-A3">31-A3 (reverse oblique)</option>
+            <option value="31-B">31-B (femur boyun)</option>
+            <option value="32-A">32-A (subtroch)</option>
+            <option value="32-B">32-B (subtroch oblique)</option>
+            <option value="normal">Normal (kirik yok)</option>
+          </select>
+          <button class="btn btn-primary" onclick="saveManualOnlyAO()" style="font-size:12px;padding:6px 10px">Kaydet</button>
+        </div>
+      </div>
       <div id="preopStatus"></div>
     `;
   }
@@ -233,6 +265,43 @@ function renderPreopSlot() {
                      cls.includes('A3') ? 'badge-AO-A3' :
                      cls.includes('B') ? 'badge-AO-B' : 'badge-AO-normal';
   
+  // MANUEL-ONLY: Grafi yok, sadece manuel sinif var
+  if (!preop.has_image) {
+    return `
+      <div style="background:#fef3c7;border:2px dashed #f59e0b;border-radius:10px;padding:30px 15px;text-align:center;margin-bottom:10px">
+        <div style="font-size:36px;opacity:0.7;margin-bottom:6px">📋</div>
+        <div style="font-size:13px;color:#92400e;font-weight:600">Manuel siniflama</div>
+        <div style="font-size:11px;color:#92400e;margin-top:3px">(grafi yuklenmedi)</div>
+      </div>
+      <div class="ai-result-small">
+        <div style="display:flex;justify-content:space-between">
+          <span><strong>AO Sinif (manuel):</strong></span>
+          <span class="badge ${badgeClass}">${cls}</span>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <label style="font-size:12px;color:#475569;display:block;margin-bottom:4px">Sinifi degistir:</label>
+        <select id="manualAOClass" style="width:100%;padding:7px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">
+          <option value="31-A1" ${cls === '31-A1' ? 'selected' : ''}>31-A1</option>
+          <option value="31-A2" ${cls === '31-A2' ? 'selected' : ''}>31-A2</option>
+          <option value="31-A3" ${cls === '31-A3' ? 'selected' : ''}>31-A3</option>
+          <option value="31-B" ${cls === '31-B' ? 'selected' : ''}>31-B</option>
+          <option value="32-A" ${cls === '32-A' ? 'selected' : ''}>32-A</option>
+          <option value="32-B" ${cls === '32-B' ? 'selected' : ''}>32-B</option>
+          <option value="normal" ${cls === 'normal' ? 'selected' : ''}>normal</option>
+        </select>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-primary" onclick="savePreopCorrection()" style="font-size:12px;padding:6px 10px;flex:1">Kaydet</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('preopFile').click()" style="font-size:12px;padding:6px 10px">Grafi Ekle</button>
+          <button class="btn btn-danger" onclick="deletePreop()" style="font-size:12px;padding:6px 10px">Sil</button>
+        </div>
+        <input type="file" id="preopFile" accept="image/*,.dcm,.dicom" style="display:none" onchange="onPreopFileSelected(this.files[0])">
+      </div>
+      <div id="preopStatus"></div>
+    `;
+  }
+  
+  // GRAFI VAR: Normal AI gosterimi
   return `
     <div class="upload-zone has-image">
       <img src="${preop.image_url}" class="image-preview">
@@ -255,6 +324,8 @@ function renderPreopSlot() {
         <option value="31-A2" ${preop.manual_class === '31-A2' ? 'selected' : ''}>31-A2</option>
         <option value="31-A3" ${preop.manual_class === '31-A3' ? 'selected' : ''}>31-A3</option>
         <option value="31-B" ${preop.manual_class === '31-B' ? 'selected' : ''}>31-B</option>
+        <option value="32-A" ${preop.manual_class === '32-A' ? 'selected' : ''}>32-A</option>
+        <option value="32-B" ${preop.manual_class === '32-B' ? 'selected' : ''}>32-B</option>
         <option value="normal" ${preop.manual_class === 'normal' ? 'selected' : ''}>normal</option>
       </select>
       <div style="display:flex;gap:6px;margin-top:8px">
@@ -262,7 +333,18 @@ function renderPreopSlot() {
         <button class="btn btn-secondary" onclick="document.getElementById('preopFile').click()" style="font-size:12px;padding:6px 10px">Yeniden Yukle</button>
         <button class="btn btn-danger" onclick="deletePreop()" style="font-size:12px;padding:6px 10px">Sil</button>
       </div>
-      <input type="file" id="preopFile" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPreop(this.files[0])">
+      <input type="file" id="preopFile" accept="image/*,.dcm,.dicom" style="display:none" onchange="onPreopFileSelected(this.files[0])">
+      <!-- Yeniden yukleme onizleme -->
+      <div id="preopPreview" style="display:none;margin-top:10px">
+        <div style="background:#f0f9ff;border:2px solid #3b82f6;border-radius:8px;padding:10px;text-align:center">
+          <img id="preopPreviewImg" style="max-width:100%;max-height:200px;border-radius:4px;margin-bottom:8px">
+          <div id="preopPreviewInfo" style="font-size:11px;color:#475569;margin-bottom:8px"></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-primary" onclick="confirmUploadPreop()" style="font-size:13px;padding:8px;flex:1">📤 Sisteme Yukle</button>
+            <button class="btn btn-secondary" onclick="cancelPreopUpload()" style="font-size:13px;padding:8px">Iptal</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div id="preopStatus"></div>
   `;
@@ -272,13 +354,26 @@ function renderPostopSlot(viewType, analysis) {
   if (!analysis) {
     const optional = viewType === 'LAT' ? ' (opsiyonel)' : '';
     return `
-      <div class="upload-zone" onclick="document.getElementById('postopFile${viewType}').click()">
+      <div class="upload-zone" id="postopUploadZone${viewType}" onclick="document.getElementById('postopFile${viewType}').click()">
         <div style="font-size:36px;margin-bottom:8px;opacity:0.4">📤</div>
-        <div style="font-weight:600;color:#475569">${viewType} grafiyi yukle${optional}</div>
+        <div style="font-weight:600;color:#475569">${viewType} grafiyi sec${optional}</div>
         <div style="font-size:12px;color:#94a3b8;margin-top:4px">AI 9 anatomik landmark + parametreler</div>
         <div style="font-size:11px;color:#94a3b8;margin-top:6px">JPG / PNG / DICOM</div>
       </div>
-      <input type="file" id="postopFile${viewType}" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPostop(this.files[0], '${viewType}')">
+      <input type="file" id="postopFile${viewType}" accept="image/*,.dcm,.dicom" style="display:none" onchange="onPostopFileSelected(this.files[0], '${viewType}')">
+      
+      <!-- Onizleme ve yukle butonu (gizli, dosya secilince acilir) -->
+      <div id="postopPreview${viewType}" style="display:none;margin-top:10px">
+        <div style="background:#f0f9ff;border:2px solid #3b82f6;border-radius:8px;padding:10px;text-align:center">
+          <img id="postopPreviewImg${viewType}" style="max-width:100%;max-height:200px;border-radius:4px;margin-bottom:8px">
+          <div id="postopPreviewInfo${viewType}" style="font-size:11px;color:#475569;margin-bottom:8px"></div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-primary" onclick="confirmUploadPostop('${viewType}')" style="font-size:13px;padding:8px;flex:1">📤 Sisteme Yukle ve Analiz Et</button>
+            <button class="btn btn-secondary" onclick="cancelPostopUpload('${viewType}')" style="font-size:13px;padding:8px">Iptal</button>
+          </div>
+        </div>
+      </div>
+      
       <div id="postop${viewType}Status"></div>
     `;
   }
@@ -299,11 +394,11 @@ function renderPostopSlot(viewType, analysis) {
         <div class="value">${analysis.nsa_deg ? analysis.nsa_deg.toFixed(1) + '°' : '-'}</div>
       </div>
       <div class="metric-mini">
-        <div class="label">Cleveland</div>
+        <div class="label">${viewType === 'LAT' ? 'AP Pozisyon' : 'Cleveland'}</div>
         <div class="value" style="font-size:11px">${analysis.cleveland_zone || '-'}</div>
       </div>
       <div class="metric-mini">
-        <div class="label">Parker AP</div>
+        <div class="label">Parker S-I</div>
         <div class="value">${analysis.parker_ap_ratio || '-'}</div>
       </div>
     </div>
@@ -317,7 +412,18 @@ function renderPostopSlot(viewType, analysis) {
       <button class="btn btn-secondary" onclick="document.getElementById('postopFile${viewType}').click()" style="font-size:12px;padding:6px 10px">Yeniden</button>
       <button class="btn btn-danger" onclick="deletePostop(${analysis.id})" style="font-size:12px;padding:6px 10px">Sil</button>
     </div>
-    <input type="file" id="postopFile${viewType}" accept="image/*,.dcm,.dicom" style="display:none" onchange="uploadPostop(this.files[0], '${viewType}')">
+    <input type="file" id="postopFile${viewType}" accept="image/*,.dcm,.dicom" style="display:none" onchange="onPostopFileSelected(this.files[0], '${viewType}')">
+    <!-- Yeniden yukleme onizleme (analiz mevcut iken) -->
+    <div id="postopPreview${viewType}" style="display:none;margin-top:10px">
+      <div style="background:#f0f9ff;border:2px solid #3b82f6;border-radius:8px;padding:10px;text-align:center">
+        <img id="postopPreviewImg${viewType}" style="max-width:100%;max-height:200px;border-radius:4px;margin-bottom:8px">
+        <div id="postopPreviewInfo${viewType}" style="font-size:11px;color:#475569;margin-bottom:8px"></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-primary" onclick="confirmUploadPostop('${viewType}')" style="font-size:13px;padding:8px;flex:1">📤 Sisteme Yukle</button>
+          <button class="btn btn-secondary" onclick="cancelPostopUpload('${viewType}')" style="font-size:13px;padding:8px">Iptal</button>
+        </div>
+      </div>
+    </div>
     <div id="postop${viewType}Status"></div>
   `;
 }
@@ -345,16 +451,81 @@ async function saveOutcome() {
 }
 
 // === Preop ===
+// Onizleme-onceli yukleme akisi (3 adim: file sec -> onizleme -> onayli yukle)
+let pendingPreopFile = null;
+const pendingPostopFile = {};  // {AP: File, LAT: File}
+
+function onPreopFileSelected(file) {
+  if (!file) return;
+  pendingPreopFile = file;
+  
+  const preview = document.getElementById('preopPreview');
+  const img = document.getElementById('preopPreviewImg');
+  const info = document.getElementById('preopPreviewInfo');
+  
+  if (!preview || !img || !info) return;
+  
+  // Onizleme (kucuk dosyalar icin direkt, DICOM icin placeholder)
+  if (file.type.startsWith('image/')) {
+    const reader = new FileReader();
+    reader.onload = e => img.src = e.target.result;
+    reader.readAsDataURL(file);
+    img.style.display = 'block';
+  } else {
+    img.style.display = 'none';
+  }
+  
+  const sizeMb = (file.size / 1024 / 1024).toFixed(2);
+  info.innerHTML = `<strong>${file.name}</strong> &middot; ${sizeMb} MB &middot; ${file.type || 'DICOM'}`;
+  preview.style.display = 'block';
+}
+
+function cancelPreopUpload() {
+  pendingPreopFile = null;
+  const preview = document.getElementById('preopPreview');
+  if (preview) preview.style.display = 'none';
+  const fileInput = document.getElementById('preopFile');
+  if (fileInput) fileInput.value = '';
+}
+
+async function confirmUploadPreop() {
+  if (!pendingPreopFile) return;
+  const file = pendingPreopFile;
+  pendingPreopFile = null;
+  
+  const preview = document.getElementById('preopPreview');
+  if (preview) preview.style.display = 'none';
+  
+  await uploadPreop(file);
+}
+
 async function uploadPreop(file) {
   if (!file) return;
   const status = document.getElementById('preopStatus');
-  status.innerHTML = '<div class="alert alert-info">AI analiz yapiliyor...</div>';
+  status.innerHTML = '<div class="alert alert-info">AI analiz yapiliyor... (10-30 sn surebilir)</div>';
+  
+  if (file.size > 30 * 1024 * 1024) {
+    status.innerHTML = `<div class="alert alert-error">Dosya cok buyuk: ${(file.size/1024/1024).toFixed(1)} MB. Maksimum 30 MB.</div>`;
+    return;
+  }
   
   const formData = new FormData();
   formData.append('image', file);
   
   try {
     const res = await fetch(`/api/preop/${PATIENT_ID}/analyze`, {method: 'POST', body: formData});
+    const contentType = res.headers.get('Content-Type') || '';
+    
+    if (!contentType.includes('application/json')) {
+      let msg = `Sunucu hatasi (HTTP ${res.status})`;
+      if (res.status === 413) msg = 'Dosya cok buyuk (Railway 30MB limit)';
+      else if (res.status === 504) msg = 'Sunucu yanit vermedi (timeout)';
+      else if (res.status === 502) msg = 'Sunucu hatasi (Bad Gateway)';
+      else if (res.status === 500) msg = 'Sunucu ic hatasi (AI cokmus olabilir)';
+      status.innerHTML = `<div class="alert alert-error">${msg}</div>`;
+      return;
+    }
+    
     const data = await res.json();
     if (data.success) {
       loadPatient();
@@ -362,7 +533,7 @@ async function uploadPreop(file) {
       status.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
     }
   } catch (e) {
-    status.innerHTML = `<div class="alert alert-error">Hata: ${e.message}</div>`;
+    status.innerHTML = `<div class="alert alert-error">Baglanti hatasi: ${e.message}</div>`;
   }
 }
 
@@ -380,27 +551,22 @@ async function savePreopCorrection() {
   }
 }
 
-async function deletePreop() {
-  if (!confirm('Preop grafiyi silmek istiyor musunuz?')) return;
-  await fetch(`/api/preop/${PATIENT_ID}`, {method: 'DELETE'});
-  loadPatient();
-}
-
-// === Postop ===
-async function uploadPostop(file, viewType) {
-  if (!file) return;
-  const status = document.getElementById(`postop${viewType}Status`);
-  status.innerHTML = '<div class="alert alert-info">AI analiz yapiliyor...</div>';
+async function saveManualOnlyAO() {
+  const cls = document.getElementById('manualOnlyClass').value;
+  if (!cls) {
+    alert('Once bir sinif secin');
+    return;
+  }
   
-  const formData = new FormData();
-  formData.append('image', file);
-  formData.append('view_type', viewType);
-  // KRITIK: Hastanin kayitli side bilgisini AI'a gonder (auto degil!)
-  // Bu sol kalcalarda flip + map_back yapilmasini saglar
-  formData.append('side', patientData.side);  // 'right' veya 'left'
+  const status = document.getElementById('preopStatus');
+  status.innerHTML = '<div class="alert alert-info">Kaydediliyor...</div>';
   
   try {
-    const res = await fetch(`/api/postop/${PATIENT_ID}/analyze`, {method: 'POST', body: formData});
+    const res = await fetch(`/api/preop/${PATIENT_ID}/manual`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({manual_class: cls}),
+    });
     const data = await res.json();
     if (data.success) {
       loadPatient();
@@ -409,6 +575,108 @@ async function uploadPostop(file, viewType) {
     }
   } catch (e) {
     status.innerHTML = `<div class="alert alert-error">Hata: ${e.message}</div>`;
+  }
+}
+
+async function deletePreop() {
+  if (!confirm('Preop grafiyi silmek istiyor musunuz?')) return;
+  await fetch(`/api/preop/${PATIENT_ID}`, {method: 'DELETE'});
+  loadPatient();
+}
+
+// === Postop ===
+// Onizleme akisi
+function onPostopFileSelected(file, viewType) {
+  if (!file) return;
+  pendingPostopFile[viewType] = file;
+  
+  const preview = document.getElementById(`postopPreview${viewType}`);
+  const img = document.getElementById(`postopPreviewImg${viewType}`);
+  const info = document.getElementById(`postopPreviewInfo${viewType}`);
+  
+  if (!preview || !img || !info) return;
+  
+  if (file.type.startsWith('image/')) {
+    const reader = new FileReader();
+    reader.onload = e => img.src = e.target.result;
+    reader.readAsDataURL(file);
+    img.style.display = 'block';
+  } else {
+    img.style.display = 'none';
+  }
+  
+  const sizeMb = (file.size / 1024 / 1024).toFixed(2);
+  info.innerHTML = `<strong>${file.name}</strong> &middot; ${sizeMb} MB &middot; ${file.type || 'DICOM'}`;
+  preview.style.display = 'block';
+}
+
+function cancelPostopUpload(viewType) {
+  pendingPostopFile[viewType] = null;
+  const preview = document.getElementById(`postopPreview${viewType}`);
+  if (preview) preview.style.display = 'none';
+  const fileInput = document.getElementById(`postopFile${viewType}`);
+  if (fileInput) fileInput.value = '';
+}
+
+async function confirmUploadPostop(viewType) {
+  const file = pendingPostopFile[viewType];
+  if (!file) return;
+  pendingPostopFile[viewType] = null;
+  
+  const preview = document.getElementById(`postopPreview${viewType}`);
+  if (preview) preview.style.display = 'none';
+  
+  await uploadPostop(file, viewType);
+}
+
+async function uploadPostop(file, viewType) {
+  if (!file) return;
+  const status = document.getElementById(`postop${viewType}Status`);
+  status.innerHTML = '<div class="alert alert-info">AI analiz yapiliyor... (30 sn surebilir)</div>';
+  
+  // Dosya boyutu kontrol (Railway 30 MB limit)
+  if (file.size > 30 * 1024 * 1024) {
+    status.innerHTML = `<div class="alert alert-error">Dosya cok buyuk: ${(file.size/1024/1024).toFixed(1)} MB. Maksimum 30 MB.</div>`;
+    return;
+  }
+  
+  const formData = new FormData();
+  formData.append('image', file);
+  formData.append('view_type', viewType);
+  // KRITIK: Hastanin kayitli side bilgisini AI'a gonder (auto degil!)
+  formData.append('side', patientData.side);
+  
+  try {
+    const res = await fetch(`/api/postop/${PATIENT_ID}/analyze`, {method: 'POST', body: formData});
+    
+    // Once response tipini kontrol et
+    const contentType = res.headers.get('Content-Type') || '';
+    
+    if (!contentType.includes('application/json')) {
+      // HTML hatasi dondu (404/500/timeout vs.)
+      const text = await res.text();
+      const isHtml = text.trim().startsWith('<');
+      
+      let msg = `Sunucu hatasi (HTTP ${res.status})`;
+      if (res.status === 413) msg = 'Dosya cok buyuk (Railway 30MB limit)';
+      else if (res.status === 504) msg = 'Sunucu yanit vermedi (timeout)';
+      else if (res.status === 502) msg = 'Sunucu hatasi (502 Bad Gateway)';
+      else if (res.status === 500) msg = 'Sunucu ic hatasi (AI cokmus olabilir, log kontrol)';
+      else if (res.status === 404) msg = 'Endpoint bulunamadi (uygulama yeniden deploy edilmis olabilir)';
+      else if (isHtml) msg = `Sunucu HTML dondu, JSON bekleniyor (HTTP ${res.status})`;
+      
+      status.innerHTML = `<div class="alert alert-error">${msg}</div>`;
+      return;
+    }
+    
+    const data = await res.json();
+    if (data.success) {
+      loadPatient();
+    } else {
+      status.innerHTML = `<div class="alert alert-error">${data.error || 'Bilinmeyen hata'}</div>`;
+    }
+  } catch (e) {
+    status.innerHTML = `<div class="alert alert-error">Baglanti hatasi: ${e.message}</div>`;
   }
 }
 

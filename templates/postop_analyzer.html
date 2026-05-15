@@ -1150,6 +1150,12 @@ function showResults() {
   const body = document.getElementById('resultsBody');
   
   card.style.display = 'block';
+  
+  // View-type'a gore etiketler farkli
+  const isLat = VIEW_TYPE === 'LAT';
+  const cleveland_label = isLat ? 'AP Pozisyon' : 'Cleveland Zone';
+  const parker_ml_label = isLat ? 'Parker A-P' : 'Parker M-L';
+  
   body.innerHTML = `
     <div class="metric-row">
       <span class="label">TAD-${VIEW_TYPE}</span>
@@ -1160,21 +1166,22 @@ function showResults() {
       <span class="value">${(p.NSA_deg || 0).toFixed(1)}°</span>
     </div>
     <div class="metric-row">
-      <span class="label">Cleveland</span>
+      <span class="label">${cleveland_label}</span>
       <span class="value" style="font-size:11px">${p.Cleveland_zone || '-'}</span>
     </div>
     <div class="metric-row">
-      <span class="label">Parker AP</span>
+      <span class="label">Parker S-I</span>
       <span class="value">${(p.Parker_AP_ratio || 0).toFixed(3)}</span>
     </div>
     <div class="metric-row">
-      <span class="label">Parker ML</span>
+      <span class="label">${parker_ml_label}</span>
       <span class="value">${(p.Parker_ML_ratio || 0).toFixed(3)}</span>
     </div>
     <div class="metric-row">
       <span class="label">Femur Basi</span>
       <span class="value">${(p.femur_head_diameter_measured_mm || 0).toFixed(1)} mm</span>
     </div>
+    ${isLat ? '<div class="helper-text" style="margin-top:8px;font-size:11px"><strong>Not:</strong> LAT grafide ölçümler sagittal plandadir. Klinik karar AP+LAT birlikte verilmeli (toplam TAD 25mm cut-off).</div>' : ''}
     <details style="margin-top:8px;font-size:11px">
       <summary style="cursor:pointer;color:#64748b;font-weight:600">Detaylar</summary>
       <div style="margin-top:6px;padding:6px;background:#f8fafc;border-radius:4px;color:#475569">

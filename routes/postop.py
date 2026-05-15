@@ -184,7 +184,8 @@ def analyze_postop(patient_id):
         params = compute_pfn_parameters(
             keypoints_dict,
             pixel_spacing_mm=pixel_spacing,
-            D_true_mm=45.0
+            D_true_mm=45.0,
+            view_type=view_type,
         )
         risk = calculate_failure_risk(params)
         
@@ -272,7 +273,8 @@ def recalculate(analysis_id):
             keypoints_dict,
             pixel_spacing_mm=pixel_spacing,
             D_true_mm=d_true,
-            manual_apex=manual_apex
+            manual_apex=manual_apex,
+            view_type=analysis.view_type,
         )
         risk = calculate_failure_risk(params)
         

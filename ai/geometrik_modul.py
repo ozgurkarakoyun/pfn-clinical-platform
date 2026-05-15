@@ -69,9 +69,28 @@ def compute_apex_baumgaertner(keypoints):
     return (float(apex[0]), float(apex[1])), x_ap_pixel, diameter_pixel, 'anatomic_neck_axis'
 
 
-def compute_pfn_parameters(keypoints, pixel_spacing_mm=0.14, D_true_mm=45.0, manual_apex=None):
-    """PFN grafisinden tum klinik parametreler"""
+def compute_pfn_parameters(keypoints, pixel_spacing_mm=0.14, D_true_mm=45.0, manual_apex=None, view_type='AP'):
+    """
+    PFN grafisinden klinik parametreler.
+    view_type: 'AP' (anteroposterior) veya 'LAT' (lateral)
+    
+    AP grafi:
+      - TAD-AP (Baumgaertner)
+      - NSA (neck-shaft angle)
+      - Cleveland zone (9-bolge): superior/central/inferior x lateral/central/medial
+      - Parker AP ratio (sup-inf): vida pozisyonu yukari-asagi
+      - Parker ML ratio (lat-med): vida pozisyonu lateral-medial
+    
+    LAT grafi:
+      - TAD-LAT (Baumgaertner, sagittal)
+      - Anterior-Posterior position (vida ekseni yon)
+      - Parker LAT ratio (anterior-posterior pozisyon)
+    
+    Not: LAT grafide medial/lateral kavrami yok (sagittal plan). 
+    Onun yerine anterior-posterior degerlendirilir.
+    """
     kp = keypoints
+    view_type = (view_type or 'AP').upper()
     
     if manual_apex is not None and len(manual_apex) == 2:
         apex = (float(manual_apex[0]), float(manual_apex[1]))
@@ -83,123 +102,215 @@ def compute_pfn_parameters(keypoints, pixel_spacing_mm=0.14, D_true_mm=45.0, man
     else:
         apex, x_ap_pixel, d_ap_pixel, method = compute_apex_baumgaertner(kp)
     
-    tad_ap_pixel_based = x_ap_pixel * pixel_spacing_mm
+    # TAD (her iki view icin de geometrik olarak ayni hesap, sadece adlandirma farkli)
+    tad_pixel_based = x_ap_pixel * pixel_spacing_mm
     if d_ap_pixel > 0:
-        tad_ap_baumgaertner = (x_ap_pixel / d_ap_pixel) * D_true_mm
+        tad_baumgaertner = (x_ap_pixel / d_ap_pixel) * D_true_mm
     else:
-        tad_ap_baumgaertner = 0
-    tad_ap_final = tad_ap_baumgaertner
-    d_ap_measured_mm = d_ap_pixel * pixel_spacing_mm
+        tad_baumgaertner = 0
+    d_measured_mm = d_ap_pixel * pixel_spacing_mm
     
-    # NSA
+    # NSA (her iki view'da da neck-shaft acisi olcuiulebilir, gerci LAT'ta klinik anlami farkli)
     neck_line = (kp['head_center'], kp['neck_distal'])
     shaft_line = (kp['shaft_proximal'], kp['shaft_distal'])
     nsa = calculate_line_angle(neck_line, shaft_line)
     if nsa < 90:
         nsa = 180 - nsa
     
-    # Cleveland
-    lateral_to_medial_x = kp['head_medial'][0] - kp['head_lateral'][0]
-    if abs(lateral_to_medial_x) > 1:
-        x_ratio = (kp['screw_tip'][0] - kp['head_lateral'][0]) / lateral_to_medial_x
-    else:
-        x_ratio = 0.5
+    # Cleveland zone - SADECE AP icin
+    # LAT grafide bu kavram yok, sadece anterior-posterior pozisyon var
+    cleveland_zone = None
+    parker_ap_ratio = None
+    parker_ml_ratio = None
+    parker_intersect = None
     
-    if x_ratio < 0.33:
-        x_zone = 'lateral'
-    elif x_ratio < 0.67:
-        x_zone = 'central'
-    else:
-        x_zone = 'medial'
+    if view_type == 'AP':
+        # Cleveland 9-zon
+        lateral_to_medial_x = kp['head_medial'][0] - kp['head_lateral'][0]
+        if abs(lateral_to_medial_x) > 1:
+            x_ratio = (kp['screw_tip'][0] - kp['head_lateral'][0]) / lateral_to_medial_x
+        else:
+            x_ratio = 0.5
+        
+        if x_ratio < 0.33:
+            x_zone = 'lateral'
+        elif x_ratio < 0.67:
+            x_zone = 'central'
+        else:
+            x_zone = 'medial'
+        
+        sup_to_inf_y = kp['head_inferior'][1] - kp['head_superior'][1]
+        if abs(sup_to_inf_y) > 1:
+            y_ratio = (kp['screw_tip'][1] - kp['head_superior'][1]) / sup_to_inf_y
+        else:
+            y_ratio = 0.5
+        
+        if y_ratio < 0.33:
+            y_zone = 'superior'
+        elif y_ratio < 0.67:
+            y_zone = 'central'
+        else:
+            y_zone = 'inferior'
+        
+        cleveland_zone = f"{y_zone}_{x_zone}"
+        
+        # Parker AP (vida-femur eksen kesisimi)
+        parker_intersect = line_line_intersection(
+            tuple(kp['neck_distal']), tuple(kp['screw_tip']),
+            tuple(kp['head_superior']), tuple(kp['head_inferior'])
+        )
+        
+        if parker_intersect:
+            sup_y = kp['head_superior'][1]
+            inf_y = kp['head_inferior'][1]
+            if abs(inf_y - sup_y) > 1:
+                parker_ap_ratio = (parker_intersect[1] - sup_y) / (inf_y - sup_y)
+            else:
+                parker_ap_ratio = 0.5
+        else:
+            parker_ap_ratio = y_ratio
+            parker_intersect = (float(kp['screw_tip'][0]), float(kp['screw_tip'][1]))
+        
+        parker_ml_ratio = x_ratio
     
-    sup_to_inf_y = kp['head_inferior'][1] - kp['head_superior'][1]
-    if abs(sup_to_inf_y) > 1:
-        y_ratio = (kp['screw_tip'][1] - kp['head_superior'][1]) / sup_to_inf_y
-    else:
-        y_ratio = 0.5
-    
-    if y_ratio < 0.33:
-        y_zone = 'superior'
-    elif y_ratio < 0.67:
-        y_zone = 'central'
-    else:
-        y_zone = 'inferior'
-    
-    cleveland_zone = f"{y_zone}_{x_zone}"
-    
-    # Parker AP (vida-femur eksen kesisimi)
-    parker_intersect = line_line_intersection(
-        tuple(kp['neck_distal']), tuple(kp['screw_tip']),
-        tuple(kp['head_superior']), tuple(kp['head_inferior'])
-    )
-    
-    if parker_intersect:
-        sup_y = kp['head_superior'][1]
-        inf_y = kp['head_inferior'][1]
-        if abs(inf_y - sup_y) > 1:
-            parker_ap_ratio = (parker_intersect[1] - sup_y) / (inf_y - sup_y)
+    elif view_type == 'LAT':
+        # LAT grafide medial/lateral kavrami yok - anterior/posterior var
+        # head_medial -> anterior cortex tahmini, head_lateral -> posterior cortex tahmini olarak kullanilir
+        # AMA bu keypoint isimleri AP'ye gore. LAT'ta yorumu farkli.
+        # Asagidaki hesap "sagittal plane'de vidanin anterior-posterior konumu"nu verir
+        
+        ap_axis = kp['head_medial'][0] - kp['head_lateral'][0]  # Sagittal axis on radiograph
+        if abs(ap_axis) > 1:
+            ap_ratio = (kp['screw_tip'][0] - kp['head_lateral'][0]) / ap_axis
+        else:
+            ap_ratio = 0.5
+        
+        # Parker LAT: anterior-posterior pozisyon
+        if ap_ratio < 0.33:
+            ap_position = 'posterior'
+        elif ap_ratio < 0.67:
+            ap_position = 'central'
+        else:
+            ap_position = 'anterior'
+        
+        # LAT'ta "Cleveland zone" yerine "AP position"
+        cleveland_zone = f"LAT_{ap_position}"
+        parker_ml_ratio = ap_ratio  # Lateral grafide bu "anterior-posterior" demek
+        
+        # Parker LAT (superior-inferior eksende vida konumu - LAT'ta da gecerli)
+        parker_intersect = line_line_intersection(
+            tuple(kp['neck_distal']), tuple(kp['screw_tip']),
+            tuple(kp['head_superior']), tuple(kp['head_inferior'])
+        )
+        
+        if parker_intersect:
+            sup_y = kp['head_superior'][1]
+            inf_y = kp['head_inferior'][1]
+            if abs(inf_y - sup_y) > 1:
+                parker_ap_ratio = (parker_intersect[1] - sup_y) / (inf_y - sup_y)
+            else:
+                parker_ap_ratio = 0.5
         else:
             parker_ap_ratio = 0.5
-    else:
-        parker_ap_ratio = y_ratio
+            parker_intersect = (float(kp['screw_tip'][0]), float(kp['screw_tip'][1]))
+    
+    parker_ratio = parker_ap_ratio if parker_ap_ratio is not None else 0.5
+    if parker_intersect is None:
         parker_intersect = (float(kp['screw_tip'][0]), float(kp['screw_tip'][1]))
     
-    parker_ml_ratio = x_ratio
-    parker_ratio = parker_ap_ratio
-    
-    return {
-        'TAD_AP_mm': round(tad_ap_final, 2),
-        'TAD_AP_baumgaertner_mm': round(tad_ap_baumgaertner, 2),
-        'TAD_AP_pixel_calibrated_mm': round(tad_ap_pixel_based, 2),
+    result = {
+        'view_type': view_type,
+        'TAD_AP_mm': round(tad_baumgaertner, 2),  # Backward compat - LAT'ta TAD-LAT'a denk
+        'TAD_baumgaertner_mm': round(tad_baumgaertner, 2),
+        'TAD_pixel_calibrated_mm': round(tad_pixel_based, 2),
         'NSA_deg': round(nsa, 2),
-        'Cleveland_zone': cleveland_zone,
+        'Cleveland_zone': cleveland_zone or '-',
         'Parker_ratio': round(parker_ratio, 3),
-        'Parker_AP_ratio': round(parker_ap_ratio, 3),
-        'Parker_ML_ratio': round(parker_ml_ratio, 3),
+        'Parker_AP_ratio': round(parker_ap_ratio, 3) if parker_ap_ratio is not None else None,
+        'Parker_ML_ratio': round(parker_ml_ratio, 3) if parker_ml_ratio is not None else None,
         'Parker_intersection_point': [float(round(parker_intersect[0], 2)), float(round(parker_intersect[1], 2))],
-        'femur_head_diameter_measured_mm': round(d_ap_measured_mm, 2),
+        'femur_head_diameter_measured_mm': round(d_measured_mm, 2),
         'femur_head_diameter_assumed_mm': D_true_mm,
         'apex_point': [float(round(apex[0], 2)), float(round(apex[1], 2))],
         'x_ap_pixel': round(x_ap_pixel, 2),
         'apex_method': method,
     }
+    
+    # LAT'ta TAD_LAT_mm da return et (acik adlandirma)
+    if view_type == 'LAT':
+        result['TAD_LAT_mm'] = round(tad_baumgaertner, 2)
+    
+    return result
 
 
 def calculate_failure_risk(params):
-    """Failure risk skoru (0-100)"""
+    """
+    Failure risk skoru (0-100).
+    AP grafide tum parametreler degerlendirilir.
+    LAT grafide sadece TAD-LAT ve anterior-posterior pozisyon degerlendirilir.
+    Klinik karar AP+LAT birlikte verilmeli (combined TAD baumgaertner cut-off: 25 mm)
+    """
     score = 0
     risk_factors = []
+    view_type = params.get('view_type', 'AP').upper()
     
-    tad = params['TAD_AP_mm']
-    if tad > 15:
-        score += 30
-        risk_factors.append(f"TAD>15mm ({tad}mm) - cut-out riski")
-    elif tad > 10:
-        score += 15
-        risk_factors.append(f"TAD 10-15mm ({tad}mm) - sinirda")
+    tad = params.get('TAD_AP_mm', 0) or 0
+    tad_label = 'TAD-LAT' if view_type == 'LAT' else 'TAD-AP'
     
-    nsa = params['NSA_deg']
-    if nsa < 120:
-        score += 25
-        risk_factors.append(f"NSA<120 ({nsa}) - varus")
-    elif nsa > 140:
-        score += 10
-        risk_factors.append(f"NSA>140 ({nsa}) - valgus")
+    # AP grafide single-plane cut-off 15 mm (Baumgaertner)
+    # LAT grafide tek basina daha az anlamli ama yine bilgi olarak verelim
+    if view_type == 'AP':
+        if tad > 15:
+            score += 30
+            risk_factors.append(f"{tad_label}>15mm ({tad}mm) - cut-out riski")
+        elif tad > 10:
+            score += 15
+            risk_factors.append(f"{tad_label} 10-15mm ({tad}mm) - sinirda")
+    else:  # LAT
+        # LAT'ta tek basina yorum yapilmaz ama yuksek deger uyari verir
+        if tad > 15:
+            score += 15  # Daha dusuk agirlik
+            risk_factors.append(f"{tad_label}>15mm ({tad}mm) - kombine TAD'a katki yuksek olabilir")
     
-    cz = params['Cleveland_zone']
-    if 'superior' in cz:
-        score += 20
-        risk_factors.append(f"Superior zon ({cz}) - cut-out predispozisyonu")
-    elif 'inferior' in cz:
-        score += 5
+    nsa = params.get('NSA_deg', 130) or 130
+    if view_type == 'AP':  # NSA klinik anlami AP'de
+        if nsa < 120:
+            score += 25
+            risk_factors.append(f"NSA<120 ({nsa}) - varus")
+        elif nsa > 140:
+            score += 10
+            risk_factors.append(f"NSA>140 ({nsa}) - valgus")
     
-    pr = params['Parker_ratio']
-    if pr < 0.4:
-        score += 15
-        risk_factors.append(f"Parker AP {pr} - SUPERIOR malpozisyon")
-    elif pr > 0.6:
-        score += 10
-        risk_factors.append(f"Parker AP {pr} - INFERIOR malpozisyon")
+    cz = params.get('Cleveland_zone', '') or ''
+    if view_type == 'AP':
+        if 'superior' in cz:
+            score += 20
+            risk_factors.append(f"Superior zon ({cz}) - cut-out predispozisyonu")
+        elif 'inferior' in cz:
+            score += 5
+    elif view_type == 'LAT':
+        # LAT'ta anterior pozisyon yuksek cut-out riskli
+        if 'anterior' in cz:
+            score += 15
+            risk_factors.append(f"LAT anterior pozisyon ({cz}) - cut-out riski")
+        elif 'posterior' in cz:
+            score += 10
+            risk_factors.append(f"LAT posterior pozisyon ({cz}) - posterior cut-through riski")
+    
+    if view_type == 'AP':
+        pr = params.get('Parker_AP_ratio', 0.5) or 0.5
+        if pr < 0.4:
+            score += 15
+            risk_factors.append(f"Parker AP {pr} - SUPERIOR malpozisyon")
+        elif pr > 0.6:
+            score += 10
+            risk_factors.append(f"Parker AP {pr} - INFERIOR malpozisyon")
+    elif view_type == 'LAT':
+        # LAT'ta Parker AP ratio yine sup-inf ama lateral grafide
+        pr = params.get('Parker_AP_ratio', 0.5) or 0.5
+        if pr < 0.4 or pr > 0.6:
+            score += 5
+            risk_factors.append(f"LAT Parker {pr} - santral degil")
     
     if score >= 50:
         category = "YUKSEK"
@@ -211,7 +322,9 @@ def calculate_failure_risk(params):
         category = "MINIMAL"
     
     return {
+        'view_type': view_type,
         'risk_score': score,
         'category': category,
         'risk_factors': risk_factors,
+        'note': 'LAT tek basina yorumlanmamali, AP ile birlikte degerlendirilmeli (combined TAD 25mm cut-off)' if view_type == 'LAT' else None,
     }
