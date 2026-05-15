@@ -1,0 +1,3 @@
+[phases.setup]
+nixPkgs = ['python311', 'gcc', 'libGL', 'libglib', 'glib']
+aptPkgs = ['libgl1', 'libglib2.0-0', 'libsm6', 'libxext6', 'libxrender-dev', 'libgomp1']
