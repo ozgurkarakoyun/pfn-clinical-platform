@@ -1,0 +1,1238 @@
+{% extends "base.html" %}
+
+{% block title %}Postop {{ view_type }} Analizi - Hasta #{{ patient_id }}{% endblock %}
+
+{% block nav_links %}
+<a href="/patient/{{ patient_id }}" class="nav-link">← Hasta Detay</a>
+{% if user_role == 'admin' %}<a href="/admin" class="nav-link">Hasta Listesi</a>{% endif %}
+{% endblock %}
+
+{% block extra_css %}
+.analyzer-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
+}
+@media (max-width: 1100px) { .analyzer-grid { grid-template-columns: 1fr; } }
+
+.canvas-card {
+  background: #0f172a;
+  border-radius: 10px;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  min-height: 500px;
+}
+.canvas-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.mode-bar { display: flex; gap: 4px; }
+.mode-btn {
+  background: transparent;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+.mode-btn:hover { background: #334155; }
+.mode-btn.active {
+  background: #1e40af;
+  color: white;
+  border-color: #1e40af;
+}
+.zoom-controls { display: flex; gap: 4px; margin-left: auto; }
+.zoom-btn {
+  background: #334155;
+  border: none;
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.zoom-btn:hover { background: #475569; }
+.zoom-label {
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 6px 10px;
+  align-self: center;
+  min-width: 50px;
+  text-align: center;
+}
+
+.canvas-container {
+  position: relative;
+  overflow: hidden;
+  background: #0f172a;
+  user-select: none;
+  touch-action: none;
+}
+#mainCanvas {
+  display: block;
+  cursor: default;
+  max-width: 100%;
+}
+.canvas-overlay {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.side-panel { display: flex; flex-direction: column; gap: 12px; }
+.panel-card {
+  background: white;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+.panel-card h4 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e40af;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 10px;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px dashed #e2e8f0;
+  font-size: 13px;
+}
+.metric-row:last-child { border-bottom: none; }
+.metric-row .label { color: #64748b; }
+.metric-row .value { font-weight: 700; color: #1e293b; }
+
+.risk-display {
+  text-align: center;
+  padding: 14px;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+.risk-display.MINIMAL { background: #d1fae5; color: #065f46; }
+.risk-display.DUSUK { background: #fef3c7; color: #92400e; }
+.risk-display.ORTA { background: #fed7aa; color: #9a3412; }
+.risk-display.YUKSEK { background: #fecaca; color: #991b1b; }
+.risk-score-big { font-size: 32px; font-weight: 700; }
+
+.helper-text {
+  background: #f1f5f9;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #475569;
+  margin-top: 8px;
+  border-left: 3px solid #3b82f6;
+}
+
+.input-row { margin-bottom: 10px; }
+.input-row label {
+  display: block;
+  font-size: 12px;
+  color: #475569;
+  margin-bottom: 3px;
+  font-weight: 500;
+}
+.input-row input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  font-size: 13px;
+}
+.hint { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+.warn-text { color: #ef4444; font-weight: 600; font-size: 12px; }
+
+.factor-list {
+  list-style: none;
+  margin-top: 6px;
+  padding: 0;
+}
+.factor-list li {
+  padding: 5px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.3);
+  font-size: 12px;
+  text-align: left;
+}
+.factor-list li:last-child { border: none; }
+
+.dicom-info-box {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #075985;
+}
+.dicom-info-box .label {
+  font-weight: 600;
+  display: inline-block;
+  min-width: 100px;
+}
+
+.action-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.action-btns button {
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  flex: 1;
+  min-width: 90px;
+}
+
+.calib-marker {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+{% endblock %}
+
+{% block content %}
+<div class="card" style="padding:14px;margin-bottom:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+    <div>
+      <h2 style="color:#1e3a8a;margin-bottom:2px">Postop {{ view_type }} - Interaktif Inceleme</h2>
+      <div style="font-size:13px;color:#64748b">Hasta #{{ patient_id }} | View: <strong>{{ view_type }}</strong></div>
+    </div>
+    <div>
+      <a href="/patient/{{ patient_id }}" class="btn btn-secondary">← Hasta Detay</a>
+    </div>
+  </div>
+</div>
+
+<div class="analyzer-grid">
+  <!-- LEFT: Canvas + Toolbar -->
+  <div>
+    <div class="canvas-card">
+      <div class="canvas-toolbar">
+        <div class="mode-bar">
+          <button class="mode-btn active" data-mode="keypoint">📍 Keypoint</button>
+          <button class="mode-btn" data-mode="pan">🤚 Pan</button>
+          <button class="mode-btn" data-mode="calibration">📏 Kalibrasyon</button>
+        </div>
+        <div class="zoom-controls">
+          <button class="zoom-btn" onclick="changeZoom(-0.2)" title="Zoom out">−</button>
+          <span class="zoom-label" id="zoomLabel">100%</span>
+          <button class="zoom-btn" onclick="changeZoom(0.2)" title="Zoom in">+</button>
+          <button class="zoom-btn" onclick="resetView()" title="Reset" style="width:auto;padding:0 8px;font-size:11px">⌂</button>
+        </div>
+      </div>
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="mainCanvas"></canvas>
+        <div class="canvas-overlay" id="canvasOverlay">Yukleniyor...</div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- RIGHT: Side Panel -->
+  <div class="side-panel">
+    <!-- Mode Content -->
+    <div class="panel-card" id="modeContentCard">
+      <h4 id="modeTitle">Mod: Keypoint</h4>
+      <div id="modeContent">Yukleniyor...</div>
+    </div>
+    
+    <!-- Results -->
+    <div class="panel-card" id="resultsCard" style="display:none">
+      <h4>Hesaplama Sonuclari</h4>
+      <div id="resultsBody"></div>
+    </div>
+    
+    <!-- Risk -->
+    <div class="panel-card" id="riskCard" style="display:none">
+      <h4>Risk Degerlendirmesi</h4>
+      <div id="riskBody"></div>
+    </div>
+    
+    <!-- DICOM Info -->
+    <div class="panel-card" id="dicomCard" style="display:none">
+      <h4>DICOM Bilgisi</h4>
+      <div id="dicomBody"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ANALYSIS_ID = {{ analysis_id }};
+const PATIENT_ID = {{ patient_id }};
+const VIEW_TYPE = "{{ view_type }}";
+
+// =============== STATE ===============
+const state = {
+  canvas: null,
+  ctx: null,
+  image: null,        // HTMLImageElement
+  imageWidth: 0,
+  imageHeight: 0,
+  
+  scale: 1,           // Image -> canvas display scale
+  zoom: 1,            // User zoom (1.0 = 100%)
+  panX: 0,            // Pan offset (canvas pixels)
+  panY: 0,
+  
+  mode: 'keypoint',   // 'keypoint' | 'pan' | 'calibration'
+  
+  // Keypoints (image coordinates)
+  keypoints: {},
+  selectedKp: null,
+  dragging: false,
+  
+  // APEX
+  lastApex: null,     // [x, y] image coords
+  lastTadMm: null,
+  apexMethod: null,
+  manualApex: null,   // user-set apex if any
+  draggingApex: false,
+  hoveringApex: false,
+  
+  // Pan
+  isPanning: false,
+  panStart: null,
+  
+  // Calibration
+  calibPoints: [],
+  calibRealMm: 17,    // PFN nail thickness default
+  pixelSpacing: 0.14,
+  calibrationDone: false,
+  dTrueMm: 45,
+  
+  // Risk & params
+  lastParams: null,
+  lastRisk: null,
+  
+  // Image details
+  imageUrl: null,
+  detectedSide: null,
+  detectionConfidence: 0,
+  dicomMetadata: null,
+};
+
+const KEYPOINT_NAMES = [
+  'head_center', 'head_superior', 'head_inferior',
+  'head_medial', 'head_lateral', 'screw_tip',
+  'neck_distal', 'shaft_proximal', 'shaft_distal'
+];
+
+// Keypoint renkleri (her biri farkli)
+const KP_COLORS = {
+  'head_center':     '#fbbf24',  // sari
+  'head_superior':   '#06b6d4',  // cyan
+  'head_inferior':   '#06b6d4',
+  'head_medial':     '#a855f7',  // mor
+  'head_lateral':    '#a855f7',
+  'screw_tip':       '#ef4444',  // kirmizi
+  'neck_distal':     '#10b981',  // yesil
+  'shaft_proximal':  '#3b82f6',  // mavi
+  'shaft_distal':    '#3b82f6',
+};
+
+const KP_LABELS = {
+  'head_center':     'HC',
+  'head_superior':   'HS',
+  'head_inferior':   'HI',
+  'head_medial':     'HM',
+  'head_lateral':    'HL',
+  'screw_tip':       'ST',
+  'neck_distal':     'ND',
+  'shaft_proximal':  'SP',
+  'shaft_distal':    'SD',
+};
+
+// Skeleton baglantilari (cizgilerle goster)
+const SKELETON = [
+  ['head_center', 'head_superior'],
+  ['head_center', 'head_inferior'],
+  ['head_center', 'head_medial'],
+  ['head_center', 'head_lateral'],
+  ['head_center', 'neck_distal'],
+  ['neck_distal', 'screw_tip'],
+  ['neck_distal', 'shaft_proximal'],
+  ['shaft_proximal', 'shaft_distal'],
+];
+
+
+// =============== INIT ===============
+async function init() {
+  state.canvas = document.getElementById('mainCanvas');
+  state.ctx = state.canvas.getContext('2d');
+  
+  setupEventListeners();
+  
+  // Analiz bilgisini cek
+  try {
+    const res = await fetch(`/api/postop/analysis/${ANALYSIS_ID}`);
+    const data = await res.json();
+    
+    if (!data.success) {
+      document.getElementById('canvasOverlay').textContent = 'Analiz yuklenemedi: ' + data.error;
+      return;
+    }
+    
+    const a = data.analysis;
+    state.imageUrl = a.image_url;
+    state.imageWidth = a.image_width;
+    state.imageHeight = a.image_height;
+    state.keypoints = a.keypoints || {};
+    state.lastApex = a.apex_point;
+    state.apexMethod = a.apex_method;
+    state.manualApex = (a.apex_method === 'manual') ? a.apex_point : null;
+    state.pixelSpacing = a.pixel_spacing_mm || 0.14;
+    state.dTrueMm = a.d_true_mm || 45;
+    state.detectedSide = a.detected_side;
+    state.detectionConfidence = a.detection_confidence;
+    state.dicomMetadata = a.dicom_metadata;
+    
+    if (a.calibration_method && a.calibration_method !== 'default') {
+      state.calibrationDone = true;
+    }
+    
+    // Initial parameters from server
+    state.lastParams = {
+      TAD_AP_mm: VIEW_TYPE === 'AP' ? a.tad_ap_mm : a.tad_lat_mm,
+      NSA_deg: a.nsa_deg,
+      Cleveland_zone: a.cleveland_zone,
+      Parker_AP_ratio: a.parker_ap_ratio,
+      Parker_ML_ratio: a.parker_ml_ratio,
+      femur_head_diameter_measured_mm: a.femur_head_diameter_mm,
+      apex_point: a.apex_point,
+      apex_method: a.apex_method,
+    };
+    state.lastTadMm = VIEW_TYPE === 'AP' ? a.tad_ap_mm : a.tad_lat_mm;
+    state.lastRisk = {
+      risk_score: a.risk_score,
+      category: a.risk_category,
+      risk_factors: a.risk_factors || [],
+    };
+    
+    // Goruntuyu yukle
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      state.image = img;
+      fitImageToCanvas();
+      drawCanvas();
+      showResults();
+      showRisk();
+      showDicom();
+      updateModeContent();
+    };
+    img.onerror = () => {
+      document.getElementById('canvasOverlay').textContent = 'Goruntu yuklenemedi';
+    };
+    img.src = state.imageUrl;
+    
+  } catch (e) {
+    document.getElementById('canvasOverlay').textContent = 'Hata: ' + e.message;
+  }
+}
+
+
+// =============== CANVAS ===============
+function fitImageToCanvas() {
+  const container = document.getElementById('canvasContainer');
+  const maxWidth = container.clientWidth || 800;
+  const maxHeight = 700;
+  
+  const ratio = Math.min(maxWidth / state.imageWidth, maxHeight / state.imageHeight);
+  state.scale = ratio;
+  
+  state.canvas.width = state.imageWidth * ratio;
+  state.canvas.height = state.imageHeight * ratio;
+}
+
+
+function drawCanvas() {
+  if (!state.image) return;
+  
+  const ctx = state.ctx;
+  const w = state.canvas.width;
+  const h = state.canvas.height;
+  const scale = state.scale;
+  const zoom = state.zoom;
+  
+  ctx.clearRect(0, 0, w, h);
+  
+  ctx.save();
+  ctx.translate(state.panX, state.panY);
+  ctx.scale(zoom, zoom);
+  
+  // Image
+  ctx.drawImage(state.image, 0, 0, state.imageWidth * scale, state.imageHeight * scale);
+  
+  // Skeleton baglantilari (beyaz ince cizgiler)
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1.5 / zoom;
+  for (const [a, b] of SKELETON) {
+    const pa = state.keypoints[a];
+    const pb = state.keypoints[b];
+    if (!pa || !pb) continue;
+    ctx.beginPath();
+    ctx.moveTo(pa[0] * scale, pa[1] * scale);
+    ctx.lineTo(pb[0] * scale, pb[1] * scale);
+    ctx.stroke();
+  }
+  
+  // TAD-AP cizgisi (sari kesik)
+  if (state.lastApex && state.keypoints.screw_tip && state.lastTadMm !== null) {
+    const apexX = state.lastApex[0] * scale;
+    const apexY = state.lastApex[1] * scale;
+    const tipX = state.keypoints.screw_tip[0] * scale;
+    const tipY = state.keypoints.screw_tip[1] * scale;
+    
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2.5 / zoom;
+    ctx.setLineDash([6/zoom, 4/zoom]);
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(apexX, apexY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // mm etiketi
+    const midX = (tipX + apexX) / 2;
+    const midY = (tipY + apexY) / 2;
+    const label = `${state.lastTadMm.toFixed(1)} mm`;
+    ctx.font = `bold ${11/zoom}px sans-serif`;
+    const metrics = ctx.measureText(label);
+    const padding = 4/zoom;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillRect(midX + 8/zoom, midY - 9/zoom, metrics.width + 2*padding, 18/zoom);
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, midX + 8/zoom + padding, midY + 4/zoom);
+    
+    // APEX isareti
+    const isManualApex = state.apexMethod === 'manual';
+    const apexColor = isManualApex ? '#ef4444' : '#fbbf24';
+    const isSelected = state.draggingApex || state.hoveringApex;
+    
+    const aSize = (isSelected ? 8 : 6) / zoom;
+    const ringSize = (isSelected ? 12 : 9) / zoom;
+    
+    // Golge
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth = 2/zoom;
+    ctx.beginPath();
+    ctx.arc(apexX, apexY, aSize, 0, 2*Math.PI);
+    ctx.stroke();
+    
+    ctx.fillStyle = apexColor;
+    ctx.beginPath();
+    ctx.arc(apexX, apexY, aSize, 0, 2*Math.PI);
+    ctx.fill();
+    
+    // Beyaz ic
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.arc(apexX, apexY, aSize/3, 0, 2*Math.PI);
+    ctx.fill();
+    
+    if (isSelected) {
+      ctx.strokeStyle = apexColor;
+      ctx.lineWidth = 1.5/zoom;
+      ctx.setLineDash([3/zoom, 3/zoom]);
+      ctx.beginPath();
+      ctx.arc(apexX, apexY, ringSize, 0, 2*Math.PI);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    
+    // "A" etiketi
+    const labelText = isManualApex ? 'A*' : 'A';
+    ctx.font = `bold ${11/zoom}px sans-serif`;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillRect(apexX + ringSize + 2/zoom, apexY - 8/zoom, (isManualApex ? 18 : 14)/zoom, 16/zoom);
+    ctx.fillStyle = apexColor;
+    ctx.fillText(labelText, apexX + ringSize + 4/zoom, apexY + 4/zoom);
+  }
+  
+  // Keypointler
+  for (const name of KEYPOINT_NAMES) {
+    const p = state.keypoints[name];
+    if (!p) continue;
+    
+    const x = p[0] * scale;
+    const y = p[1] * scale;
+    const color = KP_COLORS[name] || '#fbbf24';
+    const isSelected = (state.selectedKp === name);
+    const size = (isSelected ? 7 : 5) / zoom;
+    
+    // + isareti (cross)
+    const armLen = (isSelected ? 9 : 7) / zoom;
+    const lineWidth = 2 / zoom;
+    
+    // Golge
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth = lineWidth + 1.5/zoom;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x - armLen, y);
+    ctx.lineTo(x + armLen, y);
+    ctx.moveTo(x, y - armLen);
+    ctx.lineTo(x, y + armLen);
+    ctx.stroke();
+    
+    // Renkli +
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    ctx.moveTo(x - armLen, y);
+    ctx.lineTo(x + armLen, y);
+    ctx.moveTo(x, y - armLen);
+    ctx.lineTo(x, y + armLen);
+    ctx.stroke();
+    
+    // Merkez nokta
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, size/2, 0, 2*Math.PI);
+    ctx.fill();
+    
+    // Label (kucuk)
+    if (zoom > 0.8) {
+      ctx.font = `bold ${10/zoom}px sans-serif`;
+      const label = KP_LABELS[name] || name.substring(0, 2);
+      ctx.fillStyle = 'rgba(15,23,42,0.75)';
+      const labelW = ctx.measureText(label).width + 4/zoom;
+      ctx.fillRect(x + armLen + 2/zoom, y - 7/zoom, labelW, 14/zoom);
+      ctx.fillStyle = color;
+      ctx.fillText(label, x + armLen + 4/zoom, y + 3/zoom);
+    }
+  }
+  
+  // Calibration points
+  if (state.mode === 'calibration') {
+    for (let i = 0; i < state.calibPoints.length; i++) {
+      const p = state.calibPoints[i];
+      const x = p[0] * scale;
+      const y = p[1] * scale;
+      
+      ctx.fillStyle = '#10b981';
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.lineWidth = 2/zoom;
+      ctx.beginPath();
+      ctx.arc(x, y, 7/zoom, 0, 2*Math.PI);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Label
+      ctx.font = `bold ${12/zoom}px sans-serif`;
+      ctx.fillStyle = 'rgba(15,23,42,0.85)';
+      ctx.fillRect(x + 10/zoom, y - 9/zoom, 14/zoom, 18/zoom);
+      ctx.fillStyle = '#10b981';
+      ctx.fillText((i+1).toString(), x + 13/zoom, y + 4/zoom);
+    }
+    
+    // Iki nokta varsa cizgi ciz
+    if (state.calibPoints.length === 2) {
+      const p1 = state.calibPoints[0];
+      const p2 = state.calibPoints[1];
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 2/zoom;
+      ctx.setLineDash([4/zoom, 4/zoom]);
+      ctx.beginPath();
+      ctx.moveTo(p1[0]*scale, p1[1]*scale);
+      ctx.lineTo(p2[0]*scale, p2[1]*scale);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  
+  ctx.restore();
+  
+  // Overlay text
+  const overlay = document.getElementById('canvasOverlay');
+  let txt = `Zoom: ${(zoom*100).toFixed(0)}%`;
+  if (state.detectedSide) txt += ` | ${state.detectedSide === 'left' ? 'Sol' : 'Sag'} kalca`;
+  txt += ` | ${state.imageWidth}x${state.imageHeight}`;
+  overlay.textContent = txt;
+  
+  document.getElementById('zoomLabel').textContent = `${(zoom*100).toFixed(0)}%`;
+}
+
+
+// =============== INTERACTION ===============
+function getCanvasCoords(e) {
+  const rect = state.canvas.getBoundingClientRect();
+  const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0].clientX);
+  const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0].clientY);
+  
+  // Canvas pixel
+  const cx = (clientX - rect.left) * (state.canvas.width / rect.width);
+  const cy = (clientY - rect.top) * (state.canvas.height / rect.height);
+  
+  // Zoom/pan dahil image coords
+  const imgX = (cx - state.panX) / state.zoom / state.scale;
+  const imgY = (cy - state.panY) / state.zoom / state.scale;
+  
+  return [imgX, imgY];
+}
+
+
+function setupEventListeners() {
+  const canvas = state.canvas;
+  
+  canvas.addEventListener('mousedown', handleMouseDown);
+  canvas.addEventListener('mousemove', handleMouseMove);
+  canvas.addEventListener('mouseup', handleMouseUp);
+  canvas.addEventListener('mouseleave', handleMouseUp);
+  canvas.addEventListener('wheel', handleWheel, { passive: false });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  
+  // Touch
+  canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+  canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+  canvas.addEventListener('touchend', handleTouchEnd);
+  
+  // Mode buttons
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.mode = btn.dataset.mode;
+      updateModeContent();
+      drawCanvas();
+      updateCursor();
+    });
+  });
+  
+  // Resize
+  window.addEventListener('resize', () => {
+    if (state.image) {
+      fitImageToCanvas();
+      drawCanvas();
+    }
+  });
+}
+
+
+function updateCursor() {
+  if (!state.canvas) return;
+  if (state.mode === 'pan') state.canvas.style.cursor = 'grab';
+  else if (state.mode === 'calibration') state.canvas.style.cursor = 'crosshair';
+  else state.canvas.style.cursor = 'default';
+}
+
+
+function handleMouseDown(e) {
+  const isRightClick = (e.button === 2);
+  
+  // Pan modu veya sag tik = panning
+  if (state.mode === 'pan' || isRightClick) {
+    state.isPanning = true;
+    const rect = state.canvas.getBoundingClientRect();
+    state.panStart = {
+      mouseX: (e.clientX - rect.left) * (state.canvas.width / rect.width),
+      mouseY: (e.clientY - rect.top) * (state.canvas.height / rect.height),
+      panX: state.panX,
+      panY: state.panY,
+    };
+    state.canvas.style.cursor = 'grabbing';
+    e.preventDefault();
+    return;
+  }
+  
+  const [x, y] = getCanvasCoords(e);
+  
+  if (state.mode === 'keypoint') {
+    // APEX uzerine tiklandi mi?
+    if (state.lastApex) {
+      const apexDist = Math.sqrt((state.lastApex[0]-x)**2 + (state.lastApex[1]-y)**2);
+      const tol = 25 / (state.scale * state.zoom);
+      if (apexDist < tol) {
+        state.draggingApex = true;
+        state.canvas.style.cursor = 'grabbing';
+        drawCanvas();
+        return;
+      }
+    }
+    
+    // Keypoint uzerine tiklama
+    let closest = null;
+    let minDist = 25 / (state.scale * state.zoom);
+    
+    for (const name of KEYPOINT_NAMES) {
+      const p = state.keypoints[name];
+      if (!p) continue;
+      const d = Math.sqrt((p[0]-x)**2 + (p[1]-y)**2);
+      if (d < minDist) {
+        minDist = d;
+        closest = name;
+      }
+    }
+    
+    if (closest) {
+      state.selectedKp = closest;
+      state.dragging = true;
+      state.canvas.style.cursor = 'grabbing';
+      drawCanvas();
+    }
+  } else if (state.mode === 'calibration') {
+    // Iki nokta sec
+    if (state.calibPoints.length >= 2) {
+      state.calibPoints = [];
+    }
+    state.calibPoints.push([x, y]);
+    drawCanvas();
+    updateModeContent();
+  }
+}
+
+
+function handleMouseMove(e) {
+  // Pan
+  if (state.isPanning && state.panStart) {
+    const rect = state.canvas.getBoundingClientRect();
+    const mouseX = (e.clientX - rect.left) * (state.canvas.width / rect.width);
+    const mouseY = (e.clientY - rect.top) * (state.canvas.height / rect.height);
+    state.panX = state.panStart.panX + (mouseX - state.panStart.mouseX);
+    state.panY = state.panStart.panY + (mouseY - state.panStart.mouseY);
+    drawCanvas();
+    return;
+  }
+  
+  if (state.mode === 'pan') {
+    state.canvas.style.cursor = 'grab';
+    return;
+  }
+  
+  // APEX surukleme
+  if (state.mode === 'keypoint' && state.draggingApex) {
+    const [x, y] = getCanvasCoords(e);
+    state.lastApex = [x, y];
+    state.manualApex = [x, y];
+    state.apexMethod = 'manual';
+    drawCanvas();
+    return;
+  }
+  
+  // Keypoint surukleme
+  if (state.mode === 'keypoint' && state.dragging && state.selectedKp) {
+    const [x, y] = getCanvasCoords(e);
+    state.keypoints[state.selectedKp] = [x, y];
+    drawCanvas();
+    return;
+  }
+  
+  // Hover (sadece keypoint modunda)
+  if (state.mode === 'keypoint') {
+    const [x, y] = getCanvasCoords(e);
+    let overKp = false;
+    let overApex = false;
+    
+    if (state.lastApex) {
+      const d = Math.sqrt((state.lastApex[0]-x)**2 + (state.lastApex[1]-y)**2);
+      if (d < 25/(state.scale*state.zoom)) overApex = true;
+    }
+    
+    if (!overApex) {
+      for (const name of KEYPOINT_NAMES) {
+        const p = state.keypoints[name];
+        if (!p) continue;
+        const d = Math.sqrt((p[0]-x)**2 + (p[1]-y)**2);
+        if (d < 25/(state.scale*state.zoom)) {
+          overKp = true;
+          break;
+        }
+      }
+    }
+    
+    if (state.hoveringApex !== overApex) {
+      state.hoveringApex = overApex;
+      drawCanvas();
+    }
+    
+    state.canvas.style.cursor = (overKp || overApex) ? 'grab' : 'default';
+  }
+}
+
+
+function handleMouseUp() {
+  const wasDraggingKp = state.dragging;
+  const wasDraggingApex = state.draggingApex;
+  
+  state.dragging = false;
+  state.draggingApex = false;
+  state.isPanning = false;
+  state.panStart = null;
+  
+  updateCursor();
+  
+  // Surukleme bittiyse otomatik recalculate
+  if (wasDraggingKp || wasDraggingApex) {
+    recalculate();
+  }
+}
+
+
+function handleWheel(e) {
+  e.preventDefault();
+  const rect = state.canvas.getBoundingClientRect();
+  const mouseX = (e.clientX - rect.left) * (state.canvas.width / rect.width);
+  const mouseY = (e.clientY - rect.top) * (state.canvas.height / rect.height);
+  
+  const delta = e.deltaY < 0 ? 0.1 : -0.1;
+  zoomAt(mouseX, mouseY, delta);
+}
+
+
+function zoomAt(cx, cy, delta) {
+  const oldZoom = state.zoom;
+  let newZoom = state.zoom + delta;
+  newZoom = Math.max(0.3, Math.min(8, newZoom));
+  
+  if (newZoom === oldZoom) return;
+  
+  // Zoom around mouse position
+  state.panX = cx - (cx - state.panX) * (newZoom / oldZoom);
+  state.panY = cy - (cy - state.panY) * (newZoom / oldZoom);
+  state.zoom = newZoom;
+  drawCanvas();
+}
+
+
+function changeZoom(delta) {
+  const cx = state.canvas.width / 2;
+  const cy = state.canvas.height / 2;
+  zoomAt(cx, cy, delta);
+}
+
+
+function resetView() {
+  state.zoom = 1;
+  state.panX = 0;
+  state.panY = 0;
+  drawCanvas();
+}
+
+
+// Touch handlers
+let touchData = { dist0: 0, zoom0: 1, midX: 0, midY: 0 };
+
+function handleTouchStart(e) {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    touchData.dist0 = Math.sqrt(dx*dx + dy*dy);
+    touchData.zoom0 = state.zoom;
+    const rect = state.canvas.getBoundingClientRect();
+    touchData.midX = ((t1.clientX + t2.clientX) / 2 - rect.left) * (state.canvas.width / rect.width);
+    touchData.midY = ((t1.clientY + t2.clientY) / 2 - rect.top) * (state.canvas.height / rect.height);
+  } else if (e.touches.length === 1) {
+    const t = e.touches[0];
+    if (state.mode === 'pan') {
+      const rect = state.canvas.getBoundingClientRect();
+      state.isPanning = true;
+      state.panStart = {
+        mouseX: (t.clientX - rect.left) * (state.canvas.width / rect.width),
+        mouseY: (t.clientY - rect.top) * (state.canvas.height / rect.height),
+        panX: state.panX,
+        panY: state.panY,
+      };
+    } else {
+      handleMouseDown({clientX: t.clientX, clientY: t.clientY, button: 0, preventDefault: ()=>{}});
+    }
+  }
+}
+
+function handleTouchMove(e) {
+  e.preventDefault();
+  if (e.touches.length === 2 && touchData.dist0) {
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const newZoom = Math.max(0.3, Math.min(8, touchData.zoom0 * (dist / touchData.dist0)));
+    state.zoom = newZoom;
+    drawCanvas();
+  } else if (e.touches.length === 1) {
+    const t = e.touches[0];
+    handleMouseMove({clientX: t.clientX, clientY: t.clientY});
+  }
+}
+
+function handleTouchEnd(e) {
+  if (e.touches.length === 0) {
+    handleMouseUp();
+    touchData.dist0 = 0;
+  }
+}
+
+
+// =============== MODE PANEL ===============
+function updateModeContent() {
+  const title = document.getElementById('modeTitle');
+  const content = document.getElementById('modeContent');
+  
+  if (state.mode === 'keypoint') {
+    title.textContent = 'Mod: Keypoint Duzenleme';
+    content.innerHTML = `
+      <div class="helper-text">
+        Yanlis tahmin edilen <strong>keypoint'i tikla + surukle</strong> ile duzeltebilirsiniz.<br><br>
+        <strong>APEX (A noktasi):</strong> Sari A otomatik. Surukleyince kirmizi A* olur (manuel).
+        ${state.apexMethod === 'manual' ? '<br><button class="btn btn-secondary" onclick="resetApex()" style="margin-top:8px;padding:5px 10px;font-size:12px;width:100%">APEX\\'i AI hesabina dondur</button>' : ''}
+      </div>
+      <div class="helper-text" style="margin-top:6px;background:#fef3c7;border-color:#f59e0b">
+        💡 <strong>Ipucu:</strong> Yakindan bakmak icin mouse tekerlegi ile zoom yapin. Sag tik + surukle = pan.
+      </div>
+    `;
+  } else if (state.mode === 'pan') {
+    title.textContent = 'Mod: Pan (Surukle)';
+    content.innerHTML = `
+      <div class="helper-text">
+        Mouse'u basili tutarak <strong>goruntuyu surukleyebilirsiniz</strong>.
+        Tekerlek ile zoom in/out yapabilirsiniz.<br><br>
+        <strong>Bonus:</strong> Keypoint modunda da SAG TIK ile pan yapilabilir.
+      </div>
+    `;
+  } else if (state.mode === 'calibration') {
+    title.textContent = 'Mod: Kalibrasyon';
+    content.innerHTML = `
+      <div class="helper-text">
+        Pixel-mm donusumu icin <strong>iki nokta secin</strong> ve gercek mesafeyi girin.
+        <br><br>
+        Sectiginiz noktalar: <strong>${state.calibPoints.length}/2</strong>
+        ${state.calibPoints.length >= 2 ? '<br><span style="color:#10b981">✓ Hazir</span>' : ''}
+      </div>
+      
+      <div class="input-row" style="margin-top:10px">
+        <label>Iki nokta arasi gercek mesafe (mm)</label>
+        <input type="number" id="realDistanceInput" value="${state.calibRealMm}" step="0.1" min="0.1">
+        <div class="hint">Orn: PFN civi kalinligi 17mm, olcek cubugu 10mm</div>
+      </div>
+      
+      <div class="input-row" style="padding-top:10px;border-top:1px dashed #cbd5e1">
+        <label>Femur basi gercek capi - D_true (mm)</label>
+        <input type="number" id="dTrueInput" value="${state.dTrueMm}" step="0.5" min="20" max="80">
+        <div class="hint">Baumgaertner TAD-AP icin. Varsayim: 45mm (yetiskin)</div>
+      </div>
+      
+      <div class="action-btns">
+        <button class="btn btn-primary" onclick="applyCalibration()" ${state.calibPoints.length < 2 ? 'disabled' : ''}>Uygula</button>
+        <button class="btn btn-secondary" onclick="clearCalibration()">Temizle</button>
+      </div>
+      
+      ${state.calibrationDone ? `<div class="helper-text" style="background:#d1fae5;border-color:#10b981;margin-top:10px">
+        <strong>✓ Kalibrasyon yapilmis</strong><br>
+        Pixel-spacing: ${state.pixelSpacing.toFixed(4)} mm/px<br>
+        D_true: ${state.dTrueMm} mm
+      </div>` : ''}
+    `;
+  }
+  
+  updateCursor();
+}
+
+
+function applyCalibration() {
+  if (state.calibPoints.length !== 2) return;
+  
+  const realMm = parseFloat(document.getElementById('realDistanceInput').value);
+  if (!realMm || realMm <= 0) {
+    alert('Gecerli mesafe girin');
+    return;
+  }
+  
+  const dx = state.calibPoints[1][0] - state.calibPoints[0][0];
+  const dy = state.calibPoints[1][1] - state.calibPoints[0][1];
+  const pixelDist = Math.sqrt(dx*dx + dy*dy);
+  
+  if (pixelDist < 1) {
+    alert('Iki nokta cok yakin');
+    return;
+  }
+  
+  state.pixelSpacing = realMm / pixelDist;
+  state.calibRealMm = realMm;
+  state.calibrationDone = true;
+  
+  const dTrueInput = document.getElementById('dTrueInput');
+  if (dTrueInput) {
+    const dTrue = parseFloat(dTrueInput.value);
+    if (dTrue > 0) state.dTrueMm = dTrue;
+  }
+  
+  recalculate();
+}
+
+
+function clearCalibration() {
+  state.calibPoints = [];
+  drawCanvas();
+  updateModeContent();
+}
+
+
+function resetApex() {
+  state.manualApex = null;
+  state.apexMethod = null;
+  recalculate();
+}
+
+
+// =============== RECALCULATE ===============
+async function recalculate() {
+  try {
+    const body = {
+      keypoints: state.keypoints,
+      pixel_spacing_mm: state.pixelSpacing,
+      d_true_mm: state.dTrueMm,
+      manual_apex: state.manualApex,
+    };
+    
+    const res = await fetch(`/api/postop/${ANALYSIS_ID}/recalculate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    
+    if (!data.success) {
+      console.error('Recalc hata:', data.error);
+      return;
+    }
+    
+    state.lastParams = data.parameters;
+    state.lastRisk = data.risk;
+    state.lastApex = data.parameters.apex_point;
+    state.lastTadMm = data.parameters.TAD_AP_mm;
+    state.apexMethod = data.parameters.apex_method;
+    
+    drawCanvas();
+    showResults();
+    showRisk();
+    
+  } catch (e) {
+    console.error('Recalc exception:', e);
+  }
+}
+
+
+// =============== RESULTS PANELS ===============
+function showResults() {
+  if (!state.lastParams) return;
+  const p = state.lastParams;
+  const card = document.getElementById('resultsCard');
+  const body = document.getElementById('resultsBody');
+  
+  card.style.display = 'block';
+  body.innerHTML = `
+    <div class="metric-row">
+      <span class="label">TAD-${VIEW_TYPE}</span>
+      <span class="value" style="color:#fbbf24">${(p.TAD_AP_mm || 0).toFixed(2)} mm</span>
+    </div>
+    <div class="metric-row">
+      <span class="label">NSA</span>
+      <span class="value">${(p.NSA_deg || 0).toFixed(1)}°</span>
+    </div>
+    <div class="metric-row">
+      <span class="label">Cleveland</span>
+      <span class="value" style="font-size:11px">${p.Cleveland_zone || '-'}</span>
+    </div>
+    <div class="metric-row">
+      <span class="label">Parker AP</span>
+      <span class="value">${(p.Parker_AP_ratio || 0).toFixed(3)}</span>
+    </div>
+    <div class="metric-row">
+      <span class="label">Parker ML</span>
+      <span class="value">${(p.Parker_ML_ratio || 0).toFixed(3)}</span>
+    </div>
+    <div class="metric-row">
+      <span class="label">Femur Basi</span>
+      <span class="value">${(p.femur_head_diameter_measured_mm || 0).toFixed(1)} mm</span>
+    </div>
+    <details style="margin-top:8px;font-size:11px">
+      <summary style="cursor:pointer;color:#64748b;font-weight:600">Detaylar</summary>
+      <div style="margin-top:6px;padding:6px;background:#f8fafc;border-radius:4px;color:#475569">
+        APEX: (${p.apex_point ? p.apex_point[0].toFixed(0) + ', ' + p.apex_point[1].toFixed(0) : '-'})<br>
+        Method: ${p.apex_method || '-'}<br>
+        Pixel-spacing: ${state.pixelSpacing.toFixed(4)} mm/px<br>
+        D_true: ${state.dTrueMm} mm
+      </div>
+    </details>
+  `;
+}
+
+
+function showRisk() {
+  if (!state.lastRisk) return;
+  const r = state.lastRisk;
+  const card = document.getElementById('riskCard');
+  const body = document.getElementById('riskBody');
+  
+  card.style.display = 'block';
+  
+  let factorsHtml = '';
+  if (r.risk_factors && r.risk_factors.length > 0) {
+    factorsHtml = '<ul class="factor-list">' + 
+      r.risk_factors.map(f => `<li>• ${f}</li>`).join('') + 
+      '</ul>';
+  }
+  
+  body.innerHTML = `
+    <div class="risk-display ${r.category}">
+      <div class="risk-score-big">${r.risk_score}/100</div>
+      <div style="font-weight:600;margin-top:4px">${r.category}</div>
+      ${factorsHtml}
+    </div>
+  `;
+}
+
+
+function showDicom() {
+  if (!state.dicomMetadata || !state.dicomMetadata.is_dicom) return;
+  
+  const card = document.getElementById('dicomCard');
+  const body = document.getElementById('dicomBody');
+  
+  card.style.display = 'block';
+  
+  const d = state.dicomMetadata;
+  let html = '<div class="dicom-info-box">';
+  if (d.study_date) html += `<div><span class="label">Tarih:</span> ${d.study_date}</div>`;
+  if (d.modality) html += `<div><span class="label">Modalite:</span> ${d.modality}</div>`;
+  if (d.pixel_spacing_mm) html += `<div><span class="label">Pixel-spacing:</span> ${d.pixel_spacing_mm.toFixed(4)} mm</div>`;
+  html += '</div>';
+  
+  body.innerHTML = html;
+}
+
+
+// Start
+init();
+</script>
+{% endblock %}

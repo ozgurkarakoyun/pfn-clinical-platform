@@ -190,6 +190,35 @@ def patient_detail(patient_id):
                           user_name=session.get('name'))
 
 
+@app.route('/postop-analyzer/<int:analysis_id>')
+@doctor_or_admin_required
+def postop_analyzer(analysis_id):
+    """
+    Interaktif postop grafi gozden gecirici:
+    - Keypoint gosterimi + surukle/birak duzeltme
+    - APEX manuel ayarlama
+    - Zoom in/out + pan
+    - Kalibrasyon (2 nokta + gercek mm + D_true)
+    - TAD-AP cizgisi + mm etiketi
+    
+    Doktor sadece kendi olusturdugu hastanin analizini gorebilir.
+    """
+    from models import PostopAnalysis
+    analysis = PostopAnalysis.query.get_or_404(analysis_id)
+    
+    if session.get('role') == 'doctor':
+        created_patients = session.get('created_patients', [])
+        if analysis.patient_id not in created_patients:
+            return redirect(url_for('index'))
+    
+    return render_template('postop_analyzer.html',
+                          analysis_id=analysis_id,
+                          patient_id=analysis.patient_id,
+                          view_type=analysis.view_type,
+                          user_role=session.get('role'),
+                          user_name=session.get('name'))
+
+
 # ============= ADMIN SAYFALARI =============
 @app.route('/admin')
 @admin_required

@@ -335,6 +335,23 @@ def delete_postop(analysis_id):
         return jsonify({'error': str(e)}), 500
 
 
+@postop_bp.route('/analysis/<int:analysis_id>', methods=['GET'])
+def get_analysis(analysis_id):
+    """Tek bir postop analiz detayini dondur (interaktif gozden gecirici icin)"""
+    auth = require_doctor_or_admin()
+    if auth: return auth
+    
+    try:
+        analysis = PostopAnalysis.query.get_or_404(analysis_id)
+        
+        access = check_patient_access(analysis.patient_id)
+        if access: return access
+        
+        return jsonify({'success': True, 'analysis': analysis.to_dict()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @postop_bp.route('/<int:patient_id>/combined', methods=['GET'])
 def combined_tad(patient_id):
     """Toplam TAD (AP + LAT) hesabi"""
