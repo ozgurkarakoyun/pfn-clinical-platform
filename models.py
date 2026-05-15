@@ -67,6 +67,9 @@ class PreopAnalysis(db.Model):
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False, unique=True)
     
     image_filename = db.Column(db.String(255), nullable=True)  # Manuel only kayit icin null olabilir
+    image_url = db.Column(db.Text, nullable=True)  # Cloudinary URL veya /static/uploads/X.jpg
+    storage_id = db.Column(db.String(500), nullable=True)  # Silme icin
+    storage_type = db.Column(db.String(20), nullable=True)  # 'cloudinary' veya 'local'
     image_width = db.Column(db.Integer, nullable=True)
     image_height = db.Column(db.Integer, nullable=True)
     
@@ -86,14 +89,24 @@ class PreopAnalysis(db.Model):
     
     @property
     def has_image(self):
-        return bool(self.image_filename)
+        return bool(self.image_filename or self.image_url)
+    
+    @property
+    def display_url(self):
+        """Frontend icin URL - Cloudinary veya lokal"""
+        if self.image_url:
+            return self.image_url
+        if self.image_filename:
+            return f'/static/uploads/{self.image_filename}'
+        return None
     
     def to_dict(self):
         return {
             'id': self.id,
             'patient_id': self.patient_id,
-            'image_url': f'/static/uploads/{self.image_filename}' if self.image_filename else None,
+            'image_url': self.display_url,
             'has_image': self.has_image,
+            'storage_type': self.storage_type,
             'ai_class': self.ai_class,
             'ai_confidence': self.ai_confidence,
             'ai_bbox': self.ai_bbox,
@@ -112,7 +125,10 @@ class PostopAnalysis(db.Model):
     patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False)
     
     view_type = db.Column(db.String(5), nullable=False)  # AP / LAT
-    image_filename = db.Column(db.String(255), nullable=False)
+    image_filename = db.Column(db.String(255), nullable=True)  # Lokal fallback
+    image_url = db.Column(db.Text, nullable=True)  # Cloudinary URL veya lokal path
+    storage_id = db.Column(db.String(500), nullable=True)
+    storage_type = db.Column(db.String(20), nullable=True)
     image_width = db.Column(db.Integer, nullable=True)
     image_height = db.Column(db.Integer, nullable=True)
     
@@ -145,12 +161,22 @@ class PostopAnalysis(db.Model):
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    @property
+    def display_url(self):
+        """Frontend icin URL"""
+        if self.image_url:
+            return self.image_url
+        if self.image_filename:
+            return f'/static/uploads/{self.image_filename}'
+        return None
+    
     def to_dict(self):
         return {
             'id': self.id,
             'patient_id': self.patient_id,
             'view_type': self.view_type,
-            'image_url': f'/static/uploads/{self.image_filename}',
+            'image_url': self.display_url,
+            'storage_type': self.storage_type,
             'image_width': self.image_width,
             'image_height': self.image_height,
             'detected_side': self.detected_side,

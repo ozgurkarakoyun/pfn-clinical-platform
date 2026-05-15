@@ -65,6 +65,38 @@ def _ensure_tables():
         with app.app_context():
             db.create_all()
             print('[DB] Tablolar olusturuldu/dogrulandi')
+            
+            # Migration: storage kolonlarini eklemeye calis (yoksa)
+            # Bu eski deploy'lardan kalma tablolarda image_url, storage_id, storage_type olmayabilir
+            try:
+                from sqlalchemy import text
+                
+                migrations = [
+                    "ALTER TABLE preop_analyses ADD COLUMN IF NOT EXISTS image_url TEXT",
+                    "ALTER TABLE preop_analyses ADD COLUMN IF NOT EXISTS storage_id VARCHAR(500)",
+                    "ALTER TABLE preop_analyses ADD COLUMN IF NOT EXISTS storage_type VARCHAR(20)",
+                    "ALTER TABLE postop_analyses ADD COLUMN IF NOT EXISTS image_url TEXT",
+                    "ALTER TABLE postop_analyses ADD COLUMN IF NOT EXISTS storage_id VARCHAR(500)",
+                    "ALTER TABLE postop_analyses ADD COLUMN IF NOT EXISTS storage_type VARCHAR(20)",
+                    # image_filename'i nullable yap (manuel-only icin)
+                    "ALTER TABLE preop_analyses ALTER COLUMN image_filename DROP NOT NULL",
+                    "ALTER TABLE postop_analyses ALTER COLUMN image_filename DROP NOT NULL",
+                ]
+                
+                for migration in migrations:
+                    try:
+                        db.session.execute(text(migration))
+                        db.session.commit()
+                    except Exception as me:
+                        db.session.rollback()
+                        # Bu SQLite'da DROP NOT NULL desteklenmez, ama Railway PostgreSQL'de calisir
+                        # IF NOT EXISTS ile diger ALTER'lar zaten guvenli
+                        if 'sqlite' not in str(me).lower():
+                            print(f'[MIGRATION] {migration[:60]}... -> {str(me)[:80]}')
+                
+                print('[DB] Migration tamamlandi (storage kolonlari)')
+            except Exception as e:
+                print(f'[MIGRATION HATA] {e}')
     except Exception as e:
         print(f'[DB HATA] Tablolar olusturulamadi: {e}')
 
@@ -219,6 +251,15 @@ def postop_analyzer(analysis_id):
                           user_name=session.get('name'))
 
 
+@app.route('/safe-zones')
+@doctor_or_admin_required
+def safe_zones():
+    """Cleveland, Parker ve TAD guvenli bolgeleri klinik referans sayfasi"""
+    return render_template('safe_zones.html',
+                          user_role=session.get('role'),
+                          user_name=session.get('name'))
+
+
 # ============= ADMIN SAYFALARI =============
 @app.route('/admin')
 @admin_required
@@ -254,9 +295,17 @@ def health():
     except Exception as e:
         db_status = f'error: {str(e)}'
     
+    # Storage durumu
+    try:
+        from storage import get_storage_info
+        storage_info = get_storage_info()
+    except Exception as e:
+        storage_info = {'error': str(e)}
+    
     return jsonify({
         'status': 'ok',
         'database': db_status,
+        'storage': storage_info,
         'timestamp': datetime.utcnow().isoformat()
     })
 

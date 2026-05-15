@@ -124,33 +124,51 @@ def analyze_preop(patient_id):
         except ValueError as img_err:
             return jsonify({'error': str(img_err)}), 400
         
-        unique_id = uuid.uuid4().hex[:8]
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        filename = f'preop_{patient_id}_{timestamp}_{unique_id}.jpg'
-        save_path = UPLOAD_DIR / filename
-        img.save(save_path, 'JPEG', quality=90)
+        # Once gecici lokal save - AI'a path lazim
+        import uuid as _uuid
+        temp_filename = f'temp_preop_{patient_id}_{_uuid.uuid4().hex[:8]}.jpg'
+        temp_path = UPLOAD_DIR / temp_filename
+        img.save(temp_path, 'JPEG', quality=90)
         
         try:
-            result = classify_fracture(str(save_path))
+            result = classify_fracture(str(temp_path))
         except Exception as ai_err:
-            if save_path.exists():
-                save_path.unlink()
+            if temp_path.exists():
+                temp_path.unlink()
             import traceback
             traceback.print_exc()
             return jsonify({'error': f'AI hata: {str(ai_err)}'}), 500
         
-        # Mevcut analiz varsa sil
+        # AI bitti - simdi storage helper ile kalici kaydet
+        from storage import save_image_jpg, delete_image
+        try:
+            storage_info = save_image_jpg(img, prefix='preop', patient_id=patient_id, quality=85)
+        finally:
+            # Gecici dosyayi sil
+            if temp_path.exists():
+                temp_path.unlink()
+        
+        # Mevcut analiz varsa sil (eski storage'i da)
         existing = PreopAnalysis.query.filter_by(patient_id=patient_id).first()
         if existing:
-            old_path = UPLOAD_DIR / existing.image_filename
-            if old_path.exists():
-                old_path.unlink()
+            if existing.storage_id and existing.storage_type:
+                try:
+                    delete_image(existing.storage_id, existing.storage_type)
+                except Exception:
+                    pass
+            elif existing.image_filename:
+                old_path = UPLOAD_DIR / existing.image_filename
+                if old_path.exists():
+                    old_path.unlink()
             db.session.delete(existing)
             db.session.flush()
         
         analysis = PreopAnalysis(
             patient_id=patient_id,
-            image_filename=filename,
+            image_filename=storage_info['storage_id'] if storage_info['storage_type'] == 'local' else None,
+            image_url=storage_info['url'],
+            storage_id=storage_info['storage_id'],
+            storage_type=storage_info['storage_type'],
             image_width=img.width,
             image_height=img.height,
             ai_class=result.get('best_class'),
@@ -238,7 +256,10 @@ def set_manual_preop(patient_id):
             # Yeni manuel-only analiz olustur (gorsel yok)
             analysis = PreopAnalysis(
                 patient_id=patient_id,
-                image_filename='',  # Bos - grafi yok
+                image_filename=None,  # Bos - grafi yok
+                image_url=None,
+                storage_id=None,
+                storage_type=None,
                 image_width=None,
                 image_height=None,
                 ai_class=None,
@@ -272,8 +293,15 @@ def delete_preop(patient_id):
         if not analysis:
             return jsonify({'error': 'Bulunamadi'}), 404
         
-        # Image dosya silme - manuel-only kayitlarda image_filename bos olabilir
-        if analysis.image_filename:
+        # Storage helper ile sil (Cloudinary veya lokal)
+        if analysis.storage_id and analysis.storage_type:
+            try:
+                from storage import delete_image
+                delete_image(analysis.storage_id, analysis.storage_type)
+            except Exception:
+                pass
+        elif analysis.image_filename:
+            # Eski sistem - sadece lokal dosya
             old_path = UPLOAD_DIR / analysis.image_filename
             if old_path.exists():
                 old_path.unlink()

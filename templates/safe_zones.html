@@ -1,0 +1,523 @@
+{% extends "base.html" %}
+
+{% block title %}Güvenli Bölgeler Şeması - PFN Platform{% endblock %}
+
+{% block nav_links %}
+<a href="/" class="nav-link">+ Yeni Hasta</a>
+{% if user_role == 'admin' %}<a href="/admin" class="nav-link">Hasta Listesi</a>{% endif %}
+<a href="/safe-zones" class="nav-link primary">📍 Guvenli Bolgeler</a>
+{% endblock %}
+
+{% block extra_css %}
+.zones-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.zone-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+@media (max-width: 900px) { .zone-grid { grid-template-columns: 1fr; } }
+
+.zone-card {
+  background: white;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.zone-card h3 {
+  font-size: 16px;
+  color: #1e40af;
+  margin-bottom: 4px;
+}
+
+.zone-card .subtitle {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 14px;
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.legend-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.info-box {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  padding: 11px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #1e3a8a;
+  margin-bottom: 14px;
+}
+.info-box strong { color: #1e40af; }
+
+.parker-bar-container {
+  position: relative;
+  height: 50px;
+  margin: 12px 0 20px;
+}
+
+.parker-bar {
+  display: flex;
+  height: 32px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+}
+.parker-bar > div {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: white;
+  font-weight: 600;
+}
+
+.parker-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #64748b;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+@media (max-width: 500px) { .metrics-grid { grid-template-columns: 1fr; } }
+.metric-box {
+  background: #f1f5f9;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  text-align: center;
+}
+.metric-box .value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 3px;
+}
+.metric-box .label { color: #64748b; }
+
+.tad-comparison {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.tad-card {
+  padding: 11px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 12px;
+}
+.tad-card.good { background: #d1fae5; color: #065f46; }
+.tad-card.warn { background: #fef3c7; color: #92400e; }
+.tad-card.bad { background: #fee2e2; color: #991b1b; }
+.tad-card .threshold {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.reference {
+  background: #f8fafc;
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #475569;
+  margin-top: 20px;
+  border-top: 3px solid #1e40af;
+}
+.reference h4 { color: #1e40af; margin-bottom: 8px; }
+.reference ul { margin-left: 18px; line-height: 1.6; }
+
+.zone-grid-3x3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  max-width: 380px;
+  margin: 0 auto;
+  aspect-ratio: 1 / 1;
+}
+.zone-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 8px;
+  text-align: center;
+  line-height: 1.3;
+  position: relative;
+}
+.zone-cell .zone-name {
+  font-size: 10px;
+  font-weight: 700;
+  margin-top: 3px;
+  opacity: 0.85;
+}
+
+/* Renk kodlari */
+.risk-safe { background: #10b981; color: white; }
+.risk-good { background: #84cc16; color: white; }
+.risk-warn { background: #f59e0b; color: white; }
+.risk-bad { background: #ef4444; color: white; }
+.risk-critical { background: #991b1b; color: white; }
+
+.axis-labels {
+  position: relative;
+  max-width: 380px;
+  margin: 0 auto 14px;
+}
+.axis-label-h {
+  text-align: center;
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  margin-bottom: 6px;
+  letter-spacing: 1px;
+}
+.axis-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.axis-label-v {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-align: center;
+  padding: 8px 0;
+}
+.axis-content { flex: 1; }
+
+.compass {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+{% endblock %}
+
+{% block content %}
+<div class="zones-page">
+
+<div class="card" style="padding:18px;margin-bottom:14px">
+  <h2 style="color:#1e3a8a;margin-bottom:4px">📍 Güvenli Bölge Şemaları (PFN/Kalça Çivisi)</h2>
+  <p style="color:#64748b;font-size:13px">Lag-vida/blade pozisyonu için literatür-bazlı klinik referans şemaları. Cleveland zonları, Parker oranları ve TAD eşik değerleri.</p>
+</div>
+
+<div class="info-box">
+  <strong>Klinik Hatırlatma:</strong> Bu şemalar literatür referans değerlerine dayanır. Her hastanın klinik durumu (kemik kalitesi, kırık tipi, redüksiyon kalitesi) göz önünde bulundurulmalıdır. Sistem güvenli bölge önerisi yapmakla birlikte nihai karar cerraha aittir.
+</div>
+
+<!-- ============= AP ve LAT SVG'ler ============= -->
+<div class="zone-grid">
+  
+  <!-- AP VIEW: 9 ZONE CLEVELAND -->
+  <div class="zone-card">
+    <h3>Cleveland 9-Zone (AP Grafi)</h3>
+    <div class="subtitle">Anteroposterior görüntüde lag-vida ucu pozisyonu</div>
+    
+    <div class="axis-labels">
+      <div class="axis-label-h">← LATERAL ─── CENTRAL ─── MEDIAL →</div>
+      <div class="axis-row">
+        <div class="axis-label-v">← INFERIOR ── CENTRAL ── SUPERIOR →</div>
+        <div class="axis-content">
+          <div class="zone-grid-3x3">
+            <!-- Row 1: Superior -->
+            <div class="zone-cell risk-critical" title="superior_lateral: cut-out riski çok yüksek">⚠️<div class="zone-name">sup_lat</div></div>
+            <div class="zone-cell risk-bad" title="superior_central: cut-out riski yüksek">⚠️<div class="zone-name">sup_cen</div></div>
+            <div class="zone-cell risk-warn" title="superior_medial: orta risk">⚠<div class="zone-name">sup_med</div></div>
+            
+            <!-- Row 2: Central -->
+            <div class="zone-cell risk-warn" title="central_lateral: peripheral, orta risk">⚠<div class="zone-name">cen_lat</div></div>
+            <div class="zone-cell risk-safe" title="central_central: İDEAL">★<div class="zone-name">cen_cen</div></div>
+            <div class="zone-cell risk-good" title="central_medial: kabul edilebilir">✓<div class="zone-name">cen_med</div></div>
+            
+            <!-- Row 3: Inferior -->
+            <div class="zone-cell risk-warn" title="inferior_lateral: peripheral, orta risk">⚠<div class="zone-name">inf_lat</div></div>
+            <div class="zone-cell risk-good" title="inferior_central: kabul edilebilir">✓<div class="zone-name">inf_cen</div></div>
+            <div class="zone-cell risk-good" title="inferior_medial: postero-inf alternatif">✓<div class="zone-name">inf_med</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="legend">
+      <div class="legend-item"><span class="legend-color" style="background:#10b981"></span> İdeal (santral-santral)</div>
+      <div class="legend-item"><span class="legend-color" style="background:#84cc16"></span> Kabul edilebilir</div>
+      <div class="legend-item"><span class="legend-color" style="background:#f59e0b"></span> Periferik / orta risk</div>
+      <div class="legend-item"><span class="legend-color" style="background:#ef4444"></span> Yüksek risk</div>
+      <div class="legend-item"><span class="legend-color" style="background:#991b1b"></span> Kritik risk</div>
+    </div>
+    
+    <div class="info-box" style="margin-top:14px;font-size:12px">
+      <strong>Baumgaertner (1995):</strong> En yüksek cut-out oranları <strong>superior-lateral</strong> ve <strong>antero-superior</strong> zonlarda. <em>Deep central insertion</em> önerilir.
+    </div>
+  </div>
+  
+  <!-- LAT VIEW: AP POZISYON -->
+  <div class="zone-card">
+    <h3>Cleveland 9-Zone (LAT Grafi)</h3>
+    <div class="subtitle">Lateral görüntüde lag-vida ucu pozisyonu (sagittal plan)</div>
+    
+    <div class="axis-labels">
+      <div class="axis-label-h">← POSTERIOR ─ CENTRAL ─ ANTERIOR →</div>
+      <div class="axis-row">
+        <div class="axis-label-v">← INFERIOR ── CENTRAL ── SUPERIOR →</div>
+        <div class="axis-content">
+          <div class="zone-grid-3x3">
+            <!-- Superior -->
+            <div class="zone-cell risk-bad">⚠️<div class="zone-name">sup_post</div></div>
+            <div class="zone-cell risk-warn">⚠<div class="zone-name">sup_cen</div></div>
+            <div class="zone-cell risk-critical">⚠️<div class="zone-name">sup_ant</div></div>
+            
+            <!-- Central -->
+            <div class="zone-cell risk-warn">⚠<div class="zone-name">cen_post</div></div>
+            <div class="zone-cell risk-safe">★<div class="zone-name">cen_cen</div></div>
+            <div class="zone-cell risk-warn">⚠<div class="zone-name">cen_ant</div></div>
+            
+            <!-- Inferior -->
+            <div class="zone-cell risk-good">✓<div class="zone-name">inf_post</div></div>
+            <div class="zone-cell risk-good">✓<div class="zone-name">inf_cen</div></div>
+            <div class="zone-cell risk-warn">⚠<div class="zone-name">inf_ant</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="legend">
+      <div class="legend-item"><span class="legend-color" style="background:#10b981"></span> İdeal</div>
+      <div class="legend-item"><span class="legend-color" style="background:#84cc16"></span> Kabul edilebilir</div>
+      <div class="legend-item"><span class="legend-color" style="background:#f59e0b"></span> Orta risk</div>
+      <div class="legend-item"><span class="legend-color" style="background:#ef4444"></span> Yüksek risk</div>
+    </div>
+    
+    <div class="info-box" style="margin-top:14px;font-size:12px">
+      <strong>Hsueh (2010):</strong> <em>Posterior</em> pozisyon cut-through, <em>anterior</em> pozisyon cut-out riskini artırır. LAT'ta central optimal.
+    </div>
+  </div>
+  
+</div>
+
+<!-- ============= PARKER RATIOS ============= -->
+<div class="card" style="margin-bottom:14px">
+  <h3 class="section-title">Parker Oranı (Parker 1992)</h3>
+  <p style="color:#64748b;font-size:13px;margin-bottom:14px">
+    Vida pozisyonunu femur başında 0-100 arası oran olarak ifade eder. Her iki grafide ayrı hesaplanır.
+  </p>
+  
+  <!-- Parker AP (Superior-Inferior) -->
+  <div style="margin-bottom:18px">
+    <div style="font-size:13px;font-weight:600;color:#1e293b;margin-bottom:6px">
+      Parker S-I (Superior ← → Inferior) - AP grafide vidanin yukari-asagi konumu
+    </div>
+    <div class="parker-bar-container">
+      <div class="parker-bar">
+        <div style="background:#991b1b">SUP 0-25</div>
+        <div style="background:#ef4444">25-40</div>
+        <div style="background:#10b981">40-60 ★</div>
+        <div style="background:#f59e0b">60-75</div>
+        <div style="background:#ef4444">INF 75-100</div>
+      </div>
+      <div class="parker-labels">
+        <span>0 (Superior pol)</span>
+        <span>50 (Santral)</span>
+        <span>100 (Inferior pol)</span>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#475569;padding-left:8px;border-left:2px solid #cbd5e1">
+      <strong>İdeal:</strong> 0.40-0.60 (santral). <strong>Tehlikeli:</strong> <0.40 superior malposisyon → cut-out riski yüksek. <strong>Sub-optimal:</strong> >0.60 inferior malposisyon.
+    </div>
+  </div>
+  
+  <!-- Parker ML AP grafi -->
+  <div style="margin-bottom:18px">
+    <div style="font-size:13px;font-weight:600;color:#1e293b;margin-bottom:6px">
+      Parker M-L (Medial ← → Lateral) - AP grafide vidanin ic-dis konumu
+    </div>
+    <div class="parker-bar-container">
+      <div class="parker-bar">
+        <div style="background:#ef4444">LAT 0-25</div>
+        <div style="background:#f59e0b">25-40</div>
+        <div style="background:#10b981">40-60 ★</div>
+        <div style="background:#84cc16">60-80</div>
+        <div style="background:#f59e0b">MED 80-100</div>
+      </div>
+      <div class="parker-labels">
+        <span>0 (Lateral)</span>
+        <span>50 (Santral)</span>
+        <span>100 (Medial)</span>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#475569;padding-left:8px;border-left:2px solid #cbd5e1">
+      <strong>İdeal:</strong> 0.40-0.60 (santral). <strong>Kabul edilebilir:</strong> 0.60-0.80 (medial yön). <strong>Tehlikeli:</strong> <0.40 lateral periferik → cut-out riski.
+    </div>
+  </div>
+  
+  <!-- Parker LAT (Anterior-Posterior) -->
+  <div>
+    <div style="font-size:13px;font-weight:600;color:#1e293b;margin-bottom:6px">
+      Parker A-P (Anterior ← → Posterior) - LAT grafide vidanin on-arka konumu
+    </div>
+    <div class="parker-bar-container">
+      <div class="parker-bar">
+        <div style="background:#ef4444">ANT 0-25</div>
+        <div style="background:#f59e0b">25-40</div>
+        <div style="background:#10b981">40-60 ★</div>
+        <div style="background:#f59e0b">60-75</div>
+        <div style="background:#ef4444">POST 75-100</div>
+      </div>
+      <div class="parker-labels">
+        <span>0 (Anterior)</span>
+        <span>50 (Santral)</span>
+        <span>100 (Posterior)</span>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#475569;padding-left:8px;border-left:2px solid #cbd5e1">
+      <strong>İdeal:</strong> 0.40-0.60 (santral). <strong>Tehlikeli:</strong> <0.40 anterior → cut-out, >0.60 posterior → cut-through riski.
+    </div>
+  </div>
+</div>
+
+<!-- ============= TAD ============= -->
+<div class="card" style="margin-bottom:14px">
+  <h3 class="section-title">Tip-Apex Distance (TAD) - Baumgaertner</h3>
+  <p style="color:#64748b;font-size:13px;margin-bottom:10px">
+    Vida ucundan femur başının apeksine olan mesafe (mm). AP ve LAT grafilerde ayrı ölçülür, toplamı (combined TAD) değerlendirilir.
+  </p>
+  
+  <div class="tad-comparison">
+    <div class="tad-card good">
+      <div class="threshold">&lt; 15 mm</div>
+      <div><strong>OPTIMAL</strong></div>
+      <div style="margin-top:4px;font-size:11px">Tek grafi başına ideal</div>
+    </div>
+    <div class="tad-card warn">
+      <div class="threshold">15-25 mm</div>
+      <div><strong>SINIRDA</strong></div>
+      <div style="margin-top:4px;font-size:11px">Toplam TAD kabul edilir</div>
+    </div>
+    <div class="tad-card bad">
+      <div class="threshold">&gt; 25 mm</div>
+      <div><strong>TEHLİKELİ</strong></div>
+      <div style="margin-top:4px;font-size:11px">Cut-out riski 5x artar</div>
+    </div>
+  </div>
+  
+  <div class="info-box" style="margin-top:14px">
+    <strong>Baumgaertner formülü:</strong> TAD = (X<sub>AP</sub> / D<sub>AP</sub>) × D<sub>true</sub> + (X<sub>LAT</sub> / D<sub>LAT</sub>) × D<sub>true</sub>
+    <br><br>
+    <strong>Ölçüm:</strong> X = vida ucundan apekse uzaklık (pixel), D = femur başı çapı (pixel), D<sub>true</sub> = gerçek femur başı çapı (yetişkinde ~45 mm)
+    <br><br>
+    <strong>Anatomik apeks:</strong> Femur başı merkezinden boyun aksına dik uzantının femur başı yüzeyini kestiği nokta.
+  </div>
+</div>
+
+<!-- ============= NSA (Neck-Shaft Angle) ============= -->
+<div class="card" style="margin-bottom:14px">
+  <h3 class="section-title">Femoral Boyun-Diafiz Açısı (NSA)</h3>
+  <p style="color:#64748b;font-size:13px;margin-bottom:10px">
+    Femur boyun aksı ile diafiz aksı arasındaki açı. Redüksiyon kalitesinin göstergesi.
+  </p>
+  
+  <div class="metrics-grid">
+    <div class="metric-box" style="background:#fee2e2">
+      <div class="value" style="color:#991b1b">&lt; 120°</div>
+      <div class="label">VARUS<br><span style="font-size:10px">Cut-out riski yüksek</span></div>
+    </div>
+    <div class="metric-box" style="background:#d1fae5">
+      <div class="value" style="color:#065f46">125-135°</div>
+      <div class="label">İDEAL<br><span style="font-size:10px">Anatomik aralık</span></div>
+    </div>
+    <div class="metric-box" style="background:#fef3c7">
+      <div class="value" style="color:#92400e">&gt; 140°</div>
+      <div class="label">VALGUS<br><span style="font-size:10px">Hafif risk</span></div>
+    </div>
+  </div>
+  
+  <div class="info-box" style="margin-top:14px">
+    <strong>Klinik öneri:</strong> Karşı taraf hipsi ile 7.5°'den fazla fark cut-out riskini arttırır (literatür). Anatomik redüksiyon hedeflenmelidir.
+  </div>
+</div>
+
+<!-- ============= OZET SAYACI ============= -->
+<div class="card" style="background:linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);margin-bottom:14px">
+  <h3 class="section-title" style="color:#1e3a8a">🎯 Tip-Apex Cerrahi Hedef Özeti</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:10px">
+    <div style="background:white;padding:14px;border-radius:8px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase">Cleveland (AP)</div>
+      <div style="font-size:15px;color:#1e293b;font-weight:700;margin-top:4px">Central-Central</div>
+      <div style="font-size:11px;color:#64748b;margin-top:4px">veya inferior-medial</div>
+    </div>
+    <div style="background:white;padding:14px;border-radius:8px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase">Cleveland (LAT)</div>
+      <div style="font-size:15px;color:#1e293b;font-weight:700;margin-top:4px">Central-Central</div>
+      <div style="font-size:11px;color:#64748b;margin-top:4px">veya inferior-central</div>
+    </div>
+    <div style="background:white;padding:14px;border-radius:8px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase">Parker Oran</div>
+      <div style="font-size:15px;color:#1e293b;font-weight:700;margin-top:4px">0.40 - 0.60</div>
+      <div style="font-size:11px;color:#64748b;margin-top:4px">Her iki yönde</div>
+    </div>
+    <div style="background:white;padding:14px;border-radius:8px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase">TAD (Toplam)</div>
+      <div style="font-size:15px;color:#1e293b;font-weight:700;margin-top:4px">&lt; 25 mm</div>
+      <div style="font-size:11px;color:#64748b;margin-top:4px">İdeal &lt; 15 mm</div>
+    </div>
+    <div style="background:white;padding:14px;border-radius:8px">
+      <div style="font-size:11px;color:#64748b;text-transform:uppercase">NSA</div>
+      <div style="font-size:15px;color:#1e293b;font-weight:700;margin-top:4px">125° - 135°</div>
+      <div style="font-size:11px;color:#64748b;margin-top:4px">Anatomik redüksiyon</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============= REFERANSLAR ============= -->
+<div class="reference">
+  <h4>📚 Klinik Referanslar</h4>
+  <ul>
+    <li><strong>Cleveland M et al. (1959)</strong> - Femoral head 9-zon klasifikasyonu</li>
+    <li><strong>Baumgaertner MR et al. (1995)</strong> - Tip-Apex Distance, &lt;25mm cut-off</li>
+    <li><strong>Parker MJ (1992)</strong> - Parker oran sistemi, AP ve LAT vida pozisyonu</li>
+    <li><strong>De Bruijn K et al. (2012)</strong> - Centro-central / low-central lag-screw önerisi</li>
+    <li><strong>Caruso G et al. (2017)</strong> - Cleveland peripheral zonda cut-out riski 5x artar</li>
+    <li><strong>Hsueh KK et al. (2010)</strong> - Superior-anterior pozisyon cut-out belirleyicisi</li>
+    <li><strong>Kaufer H, Matthews LS, Sonstegard D (1974)</strong> - Postero-inferior alternatif (trabekül yoğunluğu)</li>
+  </ul>
+</div>
+
+</div>
+{% endblock %}

@@ -5,6 +5,7 @@
 {% block nav_links %}
 <a href="/patient/{{ patient_id }}" class="nav-link">← Hasta Detay</a>
 {% if user_role == 'admin' %}<a href="/admin" class="nav-link">Hasta Listesi</a>{% endif %}
+<a href="/safe-zones" class="nav-link" target="_blank">📍 Guvenli Bolgeler</a>
 {% endblock %}
 
 {% block extra_css %}

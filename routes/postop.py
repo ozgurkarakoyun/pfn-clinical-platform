@@ -152,9 +152,10 @@ def analyze_postop(patient_id):
             return jsonify({'error': str(img_err)}), 400
         
         unique_id = uuid.uuid4().hex[:8]
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        filename = f'postop_{view_type.lower()}_{patient_id}_{timestamp}_{unique_id}.jpg'
-        save_path = UPLOAD_DIR / filename
+        # Once gecici lokal save - AI'a path lazim
+        import uuid as _uuid
+        temp_filename = f'temp_postop_{view_type.lower()}_{patient_id}_{_uuid.uuid4().hex[:8]}.jpg'
+        save_path = UPLOAD_DIR / temp_filename
         img.save(save_path, 'JPEG', quality=90)
         
         try:
@@ -189,21 +190,39 @@ def analyze_postop(patient_id):
         )
         risk = calculate_failure_risk(params)
         
+        # AI bitti - storage helper ile kalici kaydet
+        from storage import save_image_jpg, delete_image
+        try:
+            storage_info = save_image_jpg(img, prefix=f'postop_{view_type.lower()}', patient_id=patient_id, quality=85)
+        finally:
+            # Gecici dosyayi sil
+            if save_path.exists():
+                save_path.unlink()
+        
         # Mevcut ayni view_type analiz varsa sil
         existing = PostopAnalysis.query.filter_by(
             patient_id=patient_id, view_type=view_type
         ).first()
         if existing:
-            old_path = UPLOAD_DIR / existing.image_filename
-            if old_path.exists():
-                old_path.unlink()
+            if existing.storage_id and existing.storage_type:
+                try:
+                    delete_image(existing.storage_id, existing.storage_type)
+                except Exception:
+                    pass
+            elif existing.image_filename:
+                old_path = UPLOAD_DIR / existing.image_filename
+                if old_path.exists():
+                    old_path.unlink()
             db.session.delete(existing)
             db.session.flush()
         
         analysis = PostopAnalysis(
             patient_id=patient_id,
             view_type=view_type,
-            image_filename=filename,
+            image_filename=storage_info['storage_id'] if storage_info['storage_type'] == 'local' else None,
+            image_url=storage_info['url'],
+            storage_id=storage_info['storage_id'],
+            storage_type=storage_info['storage_type'],
             image_width=img.width,
             image_height=img.height,
             detected_side=kp_result.get('detected_side'),
@@ -326,9 +345,18 @@ def delete_postop(analysis_id):
         access = check_patient_access(analysis.patient_id)
         if access: return access
         
-        old_path = UPLOAD_DIR / analysis.image_filename
-        if old_path.exists():
-            old_path.unlink()
+        # Storage helper ile sil
+        if analysis.storage_id and analysis.storage_type:
+            try:
+                from storage import delete_image
+                delete_image(analysis.storage_id, analysis.storage_type)
+            except Exception:
+                pass
+        elif analysis.image_filename:
+            old_path = UPLOAD_DIR / analysis.image_filename
+            if old_path.exists():
+                old_path.unlink()
+        
         db.session.delete(analysis)
         db.session.commit()
         return jsonify({'success': True})
