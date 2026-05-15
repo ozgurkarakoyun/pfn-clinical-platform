@@ -4,8 +4,80 @@ Sadelestirilmis Hasta CRUD endpoint'leri.
 - Admin: tum hastalara erisim
 """
 from datetime import datetime
+from pathlib import Path
 from flask import Blueprint, request, jsonify, session
 from models import db, Patient
+
+UPLOAD_DIR = Path(__file__).parent.parent / 'static' / 'uploads'
+VALID_SEX = {'M', 'F'}
+VALID_SIDE = {'right', 'left'}
+VALID_OUTCOME = {'pending', 'union', 'failure'}
+
+
+def _parse_patient_payload(data, *, partial=False):
+    """Hasta verisini doğrula ve normalize et. Hatalarda (None, mesaj) döner."""
+    cleaned = {}
+
+    if not partial or 'age' in data:
+        if data.get('age') is None or data.get('age') == '':
+            return None, 'Yas zorunlu'
+        try:
+            age = int(data.get('age'))
+        except (TypeError, ValueError):
+            return None, 'Yas sayisal olmali'
+        if age < 0 or age > 120:
+            return None, 'Yas 0-120 arasinda olmali'
+        cleaned['age'] = age
+
+    if not partial or 'sex' in data:
+        sex = data.get('sex')
+        if not sex:
+            return None, 'Cinsiyet zorunlu'
+        if sex not in VALID_SEX:
+            return None, 'Cinsiyet M veya F olmali'
+        cleaned['sex'] = sex
+
+    if not partial or 'side' in data:
+        side = data.get('side')
+        if not side:
+            return None, 'Taraf zorunlu'
+        if side not in VALID_SIDE:
+            return None, 'Taraf right veya left olmali'
+        cleaned['side'] = side
+
+    if 'outcome' in data or not partial:
+        outcome = data.get('outcome', 'pending') or 'pending'
+        if outcome not in VALID_OUTCOME:
+            return None, 'Outcome pending, union veya failure olmali'
+        cleaned['outcome'] = outcome
+
+    if 'nail_brand' in data or not partial:
+        nail_brand = data.get('nail_brand')
+        cleaned['nail_brand'] = nail_brand.strip() if isinstance(nail_brand, str) and nail_brand.strip() else None
+
+    if 'outcome_notes' in data or not partial:
+        outcome_notes = data.get('outcome_notes')
+        cleaned['outcome_notes'] = outcome_notes.strip() if isinstance(outcome_notes, str) and outcome_notes.strip() else None
+
+    return cleaned, None
+
+
+def _delete_patient_uploads(patient):
+    """Hasta silinirken ilişkili yüklenmiş görüntü dosyalarını da temizle."""
+    filenames = []
+    if patient.preop_analysis and patient.preop_analysis.image_filename:
+        filenames.append(patient.preop_analysis.image_filename)
+    for analysis in patient.postop_analyses.all():
+        if analysis.image_filename:
+            filenames.append(analysis.image_filename)
+
+    for filename in filenames:
+        path = UPLOAD_DIR / filename
+        try:
+            if path.exists():
+                path.unlink()
+        except OSError:
+            pass
 
 patients_bp = Blueprint('patients', __name__, url_prefix='/api/patients')
 
@@ -36,22 +108,17 @@ def create_patient():
     try:
         data = request.get_json() or {}
         
-        # Zorunlu alanlar
-        if not data.get('age') or not data.get('sex') or not data.get('side'):
-            return jsonify({'error': 'Yas, cinsiyet ve taraf zorunlu'}), 400
-        
-        if data['sex'] not in ('M', 'F'):
-            return jsonify({'error': 'Cinsiyet M veya F olmali'}), 400
-        if data['side'] not in ('right', 'left'):
-            return jsonify({'error': 'Taraf right veya left olmali'}), 400
+        cleaned, error = _parse_patient_payload(data, partial=False)
+        if error:
+            return jsonify({'error': error}), 400
         
         patient = Patient(
-            age=int(data['age']),
-            sex=data['sex'],
-            side=data['side'],
-            nail_brand=data.get('nail_brand'),
-            outcome=data.get('outcome', 'pending'),
-            outcome_notes=data.get('outcome_notes'),
+            age=cleaned['age'],
+            sex=cleaned['sex'],
+            side=cleaned['side'],
+            nail_brand=cleaned.get('nail_brand'),
+            outcome=cleaned.get('outcome', 'pending'),
+            outcome_notes=cleaned.get('outcome_notes'),
             created_by=session.get('name', 'Unknown'),
         )
         
@@ -174,9 +241,16 @@ def update_patient(patient_id):
         patient = Patient.query.get_or_404(patient_id)
         data = request.get_json() or {}
         
-        for field in ['age', 'sex', 'side', 'nail_brand', 'outcome', 'outcome_notes']:
-            if field in data:
-                setattr(patient, field, data[field])
+        allowed_fields = {'age', 'sex', 'side', 'nail_brand', 'outcome', 'outcome_notes'}
+        cleaned, error = _parse_patient_payload(
+            {k: v for k, v in data.items() if k in allowed_fields},
+            partial=True,
+        )
+        if error:
+            return jsonify({'error': error}), 400
+
+        for field, value in cleaned.items():
+            setattr(patient, field, value)
         
         db.session.commit()
         return jsonify({'success': True, 'patient': patient.to_dict(detailed=True)})
@@ -195,6 +269,7 @@ def delete_patient(patient_id):
     
     try:
         patient = Patient.query.get_or_404(patient_id)
+        _delete_patient_uploads(patient)
         db.session.delete(patient)
         db.session.commit()
         return jsonify({'success': True, 'message': f'Hasta #{patient_id} silindi'})

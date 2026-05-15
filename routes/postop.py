@@ -96,7 +96,11 @@ def load_image_from_upload(file):
         img, dicom_meta = read_dicom_to_pil(file_bytes)
         return img, dicom_meta
     
-    img = Image.open(BytesIO(file_bytes))
+    try:
+        img = Image.open(BytesIO(file_bytes))
+        img.load()
+    except Exception as exc:
+        raise ValueError('Gecersiz veya desteklenmeyen goruntu dosyasi') from exc
     
     if img.mode in ('RGBA', 'LA', 'P'):
         bg = Image.new('RGB', img.size, (255, 255, 255))
@@ -138,9 +142,14 @@ def analyze_postop(patient_id):
         if view_type not in ('AP', 'LAT'):
             return jsonify({'error': 'view_type AP veya LAT olmali'}), 400
         
-        manual_side = request.form.get('side', 'auto')
+        manual_side = (request.form.get('side', 'auto') or 'auto').lower()
+        if manual_side not in ('auto', 'left', 'right'):
+            return jsonify({'error': 'side auto, left veya right olmali'}), 400
         
-        img, dicom_meta = load_image_from_upload(file)
+        try:
+            img, dicom_meta = load_image_from_upload(file)
+        except ValueError as img_err:
+            return jsonify({'error': str(img_err)}), 400
         
         unique_id = uuid.uuid4().hex[:8]
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
@@ -151,11 +160,15 @@ def analyze_postop(patient_id):
         try:
             kp_result = predict_keypoints(str(save_path), side=manual_side)
         except Exception as ai_err:
+            if save_path.exists():
+                save_path.unlink()
             import traceback
             traceback.print_exc()
             return jsonify({'error': f'AI hata: {str(ai_err)}'}), 500
         
         if not kp_result.get('success'):
+            if save_path.exists():
+                save_path.unlink()
             return jsonify({'error': kp_result.get('error', 'Keypoint tespit edilemedi')}), 400
         
         # Kalibrasyon

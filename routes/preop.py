@@ -77,7 +77,11 @@ def load_image_from_upload(file):
     if is_dicom(file_bytes, file.filename):
         return read_dicom_to_pil(file_bytes)
     
-    img = Image.open(BytesIO(file_bytes))
+    try:
+        img = Image.open(BytesIO(file_bytes))
+        img.load()
+    except Exception as exc:
+        raise ValueError('Gecersiz veya desteklenmeyen goruntu dosyasi') from exc
     
     if img.mode in ('RGBA', 'LA', 'P'):
         bg = Image.new('RGB', img.size, (255, 255, 255))
@@ -115,7 +119,10 @@ def analyze_preop(patient_id):
         if file.filename == '':
             return jsonify({'error': 'Dosya secilmedi'}), 400
         
-        img = load_image_from_upload(file)
+        try:
+            img = load_image_from_upload(file)
+        except ValueError as img_err:
+            return jsonify({'error': str(img_err)}), 400
         
         unique_id = uuid.uuid4().hex[:8]
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
@@ -126,6 +133,8 @@ def analyze_preop(patient_id):
         try:
             result = classify_fracture(str(save_path))
         except Exception as ai_err:
+            if save_path.exists():
+                save_path.unlink()
             import traceback
             traceback.print_exc()
             return jsonify({'error': f'AI hata: {str(ai_err)}'}), 500

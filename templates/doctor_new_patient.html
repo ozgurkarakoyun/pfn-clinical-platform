@@ -3,7 +3,13 @@
 {% block title %}Yeni Hasta - PFN Platform{% endblock %}
 
 {% block nav_links %}
+{% if user_role == 'admin' %}
+<a href="/admin" class="nav-link">Hasta Listesi</a>
+<a href="/admin/dashboard" class="nav-link">Istatistikler</a>
+<a href="/" class="nav-link primary">+ Yeni Hasta</a>
+{% else %}
 <a href="/" class="nav-link primary">Yeni Hasta</a>
+{% endif %}
 {% endblock %}
 
 {% block content %}

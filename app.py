@@ -162,13 +162,12 @@ def logout():
 @app.route('/')
 @doctor_or_admin_required
 def index():
-    """
-    Doktor: sadece yeni hasta formu
-    Admin: hasta listesine yonlendir
-    """
-    if session.get('role') == 'admin':
-        return redirect(url_for('admin_patient_list'))
-    return render_template('doctor_new_patient.html', user_name=session.get('name'))
+    """Yeni hasta formu. Doktor ve admin hasta oluşturabilir."""
+    return render_template(
+        'doctor_new_patient.html',
+        user_name=session.get('name'),
+        user_role=session.get('role'),
+    )
 
 
 @app.route('/patient/<int:patient_id>')
@@ -196,14 +195,14 @@ def patient_detail(patient_id):
 @admin_required
 def admin_patient_list():
     """Admin hasta listesi"""
-    return render_template('admin_patient_list.html', user_name=session.get('name'))
+    return render_template('admin_patient_list.html', user_name=session.get('name'), user_role=session.get('role'))
 
 
 @app.route('/admin/dashboard')
 @admin_required
 def admin_dashboard():
     """Admin istatistik dashboard"""
-    return render_template('admin_dashboard.html', user_name=session.get('name'))
+    return render_template('admin_dashboard.html', user_name=session.get('name'), user_role=session.get('role'))
 
 
 # ============= API =============

@@ -37,43 +37,84 @@ def get_pfn_model():
     return _model
 
 
+def _boxes_count(result):
+    if result is None or getattr(result, 'boxes', None) is None:
+        return 0
+    return len(result.boxes)
+
+
+def _best_detection_index(result):
+    """Birden fazla tespit varsa confidence'ı en yüksek olanı seç."""
+    if _boxes_count(result) == 0:
+        return None
+    try:
+        return int(result.boxes.conf.argmax().item())
+    except Exception:
+        return 0
+
+
+def _best_detection_score(result):
+    idx = _best_detection_index(result)
+    if idx is None:
+        return 0.0
+    try:
+        return float(result.boxes.conf[idx])
+    except Exception:
+        return 0.0
+
+
+def _tmp_jpeg_path(image_path, suffix):
+    path = Path(image_path)
+    return str(path.with_name(f"{path.stem}_{suffix}{path.suffix or '.jpg'}"))
+
+
 def predict_with_auto_orientation(image_path, min_confidence=0.3):
     """Hem orijinal hem flip ile dene, yuksek confidence olani sec"""
     model = get_pfn_model()
-    
+
     results_orig = model.predict(image_path, conf=min_confidence, verbose=False)
-    
+
     img = Image.open(image_path)
-    flipped = img.transpose(Image.FLIP_LEFT_RIGHT)
-    flipped_path = str(image_path).replace('.jpg', '_flipped_tmp.jpg')
+    flipped = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    flipped_path = _tmp_jpeg_path(image_path, 'flipped_tmp')
     flipped.save(flipped_path, 'JPEG', quality=95)
-    
+
     try:
         results_flip = model.predict(flipped_path, conf=min_confidence, verbose=False)
     finally:
         if os.path.exists(flipped_path):
             os.remove(flipped_path)
-    
-    orig_score = 0
-    flip_score = 0
-    
-    if results_orig and len(results_orig[0].boxes) > 0:
-        orig_score = float(results_orig[0].boxes.conf.max())
-    if results_flip and len(results_flip[0].boxes) > 0:
-        flip_score = float(results_flip[0].boxes.conf.max())
-    
-    if orig_score > flip_score and orig_score > min_confidence:
-        return results_orig[0], False, orig_score
-    elif flip_score > min_confidence:
-        return results_flip[0], True, flip_score
+
+    result_orig = results_orig[0] if results_orig else None
+    result_flip = results_flip[0] if results_flip else None
+    orig_score = _best_detection_score(result_orig)
+    flip_score = _best_detection_score(result_flip)
+
+    if orig_score >= flip_score and orig_score >= min_confidence:
+        return result_orig, False, orig_score
+    if flip_score >= min_confidence:
+        return result_flip, True, flip_score
     return None, False, 0.0
 
 
 def map_keypoints_back(kp_array, image_width):
     """Flip edilmis koordinatlari orijinale geri map et"""
     mapped = kp_array.copy()
-    mapped[:, 0] = image_width - kp_array[:, 0]
+    mapped[:, 0] = (image_width - 1) - kp_array[:, 0]
     return mapped
+
+
+def _extract_best_keypoints(result):
+    """YOLO result içinden en güvenilir tespitin keypoint dizisini al."""
+    if result is None or getattr(result, 'keypoints', None) is None:
+        return None
+    if len(result.keypoints) == 0:
+        return None
+    idx = _best_detection_index(result) or 0
+    try:
+        return result.keypoints.xy[idx].cpu().numpy()
+    except Exception:
+        return result.keypoints.xy[0].cpu().numpy()
 
 
 def predict_keypoints(image_path, side='auto'):
@@ -81,12 +122,16 @@ def predict_keypoints(image_path, side='auto'):
     model = get_pfn_model()
     img = Image.open(image_path)
     image_width = img.width
-    
+
+    side = (side or 'auto').lower()
+    if side not in ('auto', 'left', 'right'):
+        return {'success': False, 'error': 'side auto, left veya right olmali'}
+
     if side == 'auto':
         result, was_flipped, confidence = predict_with_auto_orientation(image_path)
     elif side == 'left':
-        flipped = img.transpose(Image.FLIP_LEFT_RIGHT)
-        flipped_path = str(image_path).replace('.jpg', '_left_tmp.jpg')
+        flipped = img.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+        flipped_path = _tmp_jpeg_path(image_path, 'left_tmp')
         flipped.save(flipped_path, 'JPEG', quality=95)
         try:
             results = model.predict(flipped_path, conf=0.3, verbose=False)
@@ -95,34 +140,39 @@ def predict_keypoints(image_path, side='auto'):
                 os.remove(flipped_path)
         result = results[0] if results else None
         was_flipped = True
-        confidence = float(result.boxes.conf.max()) if result and len(result.boxes) > 0 else 0.0
+        confidence = _best_detection_score(result)
     else:  # right
         results = model.predict(image_path, conf=0.3, verbose=False)
         result = results[0] if results else None
         was_flipped = False
-        confidence = float(result.boxes.conf.max()) if result and len(result.boxes) > 0 else 0.0
-    
-    if result is None or result.keypoints is None or len(result.keypoints) == 0:
+        confidence = _best_detection_score(result)
+
+    if result is None or _boxes_count(result) == 0:
         return {
             'success': False,
             'error': 'Grafide kalca implanti tespit edilemedi'
         }
-    
-    kp_array = result.keypoints.xy[0].cpu().numpy()
-    
+
+    kp_array = _extract_best_keypoints(result)
+    if kp_array is None:
+        return {
+            'success': False,
+            'error': 'Grafide keypoint tespit edilemedi'
+        }
+
     if len(kp_array) != 9:
         return {
             'success': False,
             'error': f'9 keypoint bekleniyor, {len(kp_array)} bulundu'
         }
-    
+
     if was_flipped:
         kp_array = map_keypoints_back(kp_array, image_width)
-    
+
     keypoints = {}
     for i, name in enumerate(KEYPOINT_NAMES):
         keypoints[name] = [float(kp_array[i][0]), float(kp_array[i][1])]
-    
+
     return {
         'success': True,
         'keypoints': keypoints,

@@ -12,9 +12,13 @@ def euclidean_distance(p1, p2):
 
 
 def calculate_line_angle(line_a, line_b):
-    v1 = np.array([line_a[1][0] - line_a[0][0], line_a[1][1] - line_a[0][1]])
-    v2 = np.array([line_b[1][0] - line_b[0][0], line_b[1][1] - line_b[0][1]])
-    cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+    v1 = np.array([line_a[1][0] - line_a[0][0], line_a[1][1] - line_a[0][1]], dtype=float)
+    v2 = np.array([line_b[1][0] - line_b[0][0], line_b[1][1] - line_b[0][1]], dtype=float)
+    n1 = np.linalg.norm(v1)
+    n2 = np.linalg.norm(v2)
+    if n1 < 1e-9 or n2 < 1e-9:
+        return 0.0
+    cos_angle = np.dot(v1, v2) / (n1 * n2)
     cos_angle = np.clip(cos_angle, -1.0, 1.0)
     angle = math.degrees(math.acos(cos_angle))
     return angle if angle <= 180 else 360 - angle
