@@ -61,3 +61,17 @@
 ## Not
 
 `models_files/best.pt` ve `models_files/femur_model.pt` dosyaları ZIP içinde yoksa AI analiz fonksiyonları doğal olarak model bulunamadı hatası verir. Uygulama modeller olmadan açılır; fakat preop/postop AI analizi için bu dosyaların doğru klasöre konması gerekir.
+
+## Port/Deploy Fix - 2026-05-15
+
+Hata: `Error: '$PORT' is not a valid port number.`
+
+Duzeltme:
+- `start.sh` POSIX `sh` uyumlu hale getirildi.
+- `PORT` bos, gecersiz veya literal `$PORT` gelirse guvenli fallback olarak `8080` kullaniliyor.
+- `Procfile` `web: sh start.sh` olarak sadeleştirildi.
+- `Dockerfile` baslatma komutu `CMD ["sh", "-c", "exec /app/start.sh"]` olarak guncellendi.
+- Railway icin `railway.json` eklendi: `startCommand: sh start.sh`, `healthcheckPath: /health`.
+
+Not:
+Railway ayarlarinda manuel Start Command olarak `gunicorn app:app --bind 0.0.0.0:$PORT` yaziliysa silin veya `sh start.sh` olarak degistirin. JSON/exec biciminde yazilan komutlar `$PORT` degiskenini expand etmez ve bu hatayi uretir.

@@ -16,20 +16,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Python paketleri
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Uygulama
 COPY . .
 
-# Gereken klasorler + start.sh executable
 RUN mkdir -p /app/models_files /app/static/uploads && \
     chmod +x /app/start.sh
 
-# Port (Railway $PORT environment variable kullanir)
 EXPOSE 8080
 
-# Start.sh ile bash uzerinden calistir - $PORT dogru expand olur
-ENTRYPOINT ["/bin/bash", "/app/start.sh"]
+# Shell form: ${PORT:-8080} expansion deploy ortaminda dogru calissin.
+CMD ["sh", "-c", "exec /app/start.sh"]
