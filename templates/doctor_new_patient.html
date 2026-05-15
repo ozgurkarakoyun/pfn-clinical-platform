@@ -12,8 +12,71 @@
 {% endif %}
 {% endblock %}
 
+{% block extra_css %}
+.nail-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 6px;
+}
+@media (max-width: 600px) { .nail-picker { grid-template-columns: 1fr; } }
+
+.nail-card {
+  border: 2px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 8px 12px;
+  cursor: pointer;
+  text-align: center;
+  background: #f8fafc;
+  transition: all 0.15s;
+  user-select: none;
+}
+.nail-card:hover {
+  border-color: #3b82f6;
+  background: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(59,130,246,0.15);
+}
+.nail-card.selected {
+  border-color: #1e40af;
+  background: #dbeafe;
+  box-shadow: 0 0 0 2px #93c5fd;
+}
+.nail-card img {
+  width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+.nail-card .nail-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+.nail-card .nail-desc {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.3;
+}
+.nail-card.unknown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  margin-top: 10px;
+}
+.nail-card.unknown .icon {
+  font-size: 32px;
+  opacity: 0.5;
+  margin-bottom: 6px;
+}
+{% endblock %}
+
 {% block content %}
-<div class="card" style="max-width:720px;margin:0 auto">
+<div class="card" style="max-width:820px;margin:0 auto">
   <h2 class="section-title">Yeni Hasta Kaydi</h2>
   <p style="color:#64748b;font-size:14px;margin-bottom:20px">
     Once temel bilgileri girin. Sonra grafileri yukleyebilirsiniz.
@@ -44,17 +107,31 @@
     </div>
     
     <div class="form-group">
-      <label>Civi Markasi (varsa)</label>
-      <select id="nail_brand">
-        <option value="">Bilinmiyor</option>
-        <option value="PFNA">PFNA</option>
-        <option value="PFNA-II">PFNA-II</option>
-        <option value="Gamma 3">Gamma 3</option>
-        <option value="TFN">TFN</option>
-        <option value="InterTAN">InterTAN</option>
-        <option value="Trigen INTERTAN">Trigen INTERTAN</option>
-        <option value="Other">Diger</option>
-      </select>
+      <label>Civi Tipi (grafiye benzer olani secin)</label>
+      <div class="nail-picker">
+        <div class="nail-card" data-value="INTERTAN" onclick="selectNail(this)">
+          <img src="/static/img/nail_intertan.png" alt="INTERTAN">
+          <div class="nail-name">INTERTAN</div>
+          <div class="nail-desc">Bicak + vida<br>(rekonstrüksiyon)</div>
+        </div>
+        <div class="nail-card" data-value="A-PFN" onclick="selectNail(this)">
+          <img src="/static/img/nail_apfn.png" alt="A-PFN">
+          <div class="nail-name">A-PFN</div>
+          <div class="nail-desc">Tek helikal vida<br>(anti-rotasyon)</div>
+        </div>
+        <div class="nail-card" data-value="PROFIN" onclick="selectNail(this)">
+          <img src="/static/img/nail_profin.png" alt="PROFIN">
+          <div class="nail-name">PROFIN</div>
+          <div class="nail-desc">Iki paralel vida<br>(profin/trochanteric)</div>
+        </div>
+      </div>
+      
+      <div class="nail-card unknown" data-value="" onclick="selectNail(this)" id="unknownNailCard">
+        <div class="icon">❓</div>
+        <div class="nail-name" style="font-size:13px">Bilinmiyor / Diger</div>
+      </div>
+      
+      <input type="hidden" id="nail_brand" name="nail_brand" value="">
     </div>
     
     <div class="form-group">
@@ -80,14 +157,22 @@
 
 {% block scripts %}
 <script>
+function selectNail(card) {
+  document.querySelectorAll('.nail-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById('nail_brand').value = card.dataset.value;
+}
+
 document.getElementById('newPatientForm').addEventListener('submit', async (e) => {
   e.preventDefault();
+  
+  const nailValue = document.getElementById('nail_brand').value;
   
   const data = {
     age: parseInt(document.getElementById('age').value),
     sex: document.getElementById('sex').value,
     side: document.getElementById('side').value,
-    nail_brand: document.getElementById('nail_brand').value || null,
+    nail_brand: nailValue || null,
     outcome: document.getElementById('outcome').value,
   };
   
