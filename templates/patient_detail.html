@@ -395,7 +395,9 @@ async function uploadPostop(file, viewType) {
   const formData = new FormData();
   formData.append('image', file);
   formData.append('view_type', viewType);
-  formData.append('side', 'auto');
+  // KRITIK: Hastanin kayitli side bilgisini AI'a gonder (auto degil!)
+  // Bu sol kalcalarda flip + map_back yapilmasini saglar
+  formData.append('side', patientData.side);  // 'right' veya 'left'
   
   try {
     const res = await fetch(`/api/postop/${PATIENT_ID}/analyze`, {method: 'POST', body: formData});
